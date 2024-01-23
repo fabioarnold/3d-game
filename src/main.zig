@@ -15,8 +15,8 @@ var color_loc: c_int = undefined;
 export fn onInit() void {
     gl.glEnable(gl.GL_DEPTH_TEST);
 
-    const vert_src = @embedFile("../data/transform.vert");
-    const frag_src = @embedFile("../data/color.frag");
+    const vert_src = @embedFile("shaders/transform.vert");
+    const frag_src = @embedFile("shaders/color.frag");
     const vert_shader = gl.glInitShader(vert_src, vert_src.len, gl.GL_VERTEX_SHADER);
     const frag_shader = gl.glInitShader(frag_src, frag_src.len, gl.GL_FRAGMENT_SHADER);
     const program = gl.glLinkShaderProgram(vert_shader, frag_shader);
@@ -32,10 +32,10 @@ export fn onInit() void {
 }
 
 export fn onResize(w: c_uint, h: c_uint, s: f32) void {
-    video_width = @intToFloat(f32, w);
-    video_height = @intToFloat(f32, h);
+    video_width = @floatFromInt(w);
+    video_height = @floatFromInt(h);
     video_scale = s;
-    gl.glViewport(0, 0, @floatToInt(i32, s * video_width), @floatToInt(i32, s * video_height));
+    gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
 }
 
 var cam_x: f32 = 0;
@@ -57,9 +57,9 @@ export fn onAnimationFrame() void {
 
     const projection = za.perspective(45.0, video_width / video_height, 0.1, 10.0);
     const view = Mat4.fromTranslate(Vec3.new(cam_x, cam_y, -4));
-    const model = Mat4.fromRotation(2 * @intToFloat(f32, frame), Vec3.up());
+    const model = Mat4.fromRotation(@floatFromInt(2 * frame), Vec3.up());
 
-    const mvp = projection.mult(view.mult(model));
+    const mvp = projection.mul(view.mul(model));
     gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
 
     gl.glEnableVertexAttribArray(0);

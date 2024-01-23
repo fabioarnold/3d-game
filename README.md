@@ -10,5 +10,11 @@ $ git clone --recursive https://github.com/fabioarnold/hello-webgl
 
 ```bash
 $ cd hello-webgl
-$ zig build --prefix .
+$ zig build
+```
+
+## Run a local web server
+
+```bash
+$ python3 -m http.server
 ```

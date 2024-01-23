@@ -1,20 +1,17 @@
 # Hello WebGL in Zig
 
-## Get the source
+<img alt="Screenshot" src="screenshot.png?raw=true" width="823">
+
+## Build and run in your browser
 
 ```bash
-$ git clone --recursive https://github.com/fabioarnold/hello-webgl
-```
+# fetch the source and build
+git clone https://github.com/fabioarnold/hello-webgl
+cd hello-webgl
+zig build
 
-## Build main.wasm
+# run a local http server
+python3 -m http.server
 
-```bash
-$ cd hello-webgl
-$ zig build
-```
-
-## Run a local web server
-
-```bash
-$ python3 -m http.server
+# open http://localhost:8000 in your browser
 ```

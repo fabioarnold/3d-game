@@ -1,5 +1,5 @@
 // Shaders
-pub extern fn glInitShader(source: [*]const u8 , len: c_uint, type: c_uint) c_uint;
+pub extern fn glInitShader(source: [*]const u8, len: c_uint, type: c_uint) c_uint;
 pub extern fn glLinkShaderProgram(vertexShaderId: c_uint, fragmentShaderId: c_uint) c_uint;
 
 // GL
@@ -73,7 +73,7 @@ pub const GL_TEXTURE0: c_uint = 33984;
 pub const GL_BLEND: c_uint = 3042;
 pub const GL_SRC_ALPHA: c_uint = 770;
 pub const GL_ONE_MINUS_SRC_ALPHA: c_uint = 771;
-pub const GL_ONE: c_uint= 1;
+pub const GL_ONE: c_uint = 1;
 pub const GL_NO_ERROR = 0;
 pub const GL_FALSE = 0;
 pub const GL_TRUE = 1;

@@ -1,0 +1,15 @@
+.{
+    .name = "hello-webgl",
+    .version = "0.0.1",
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+    },
+    .dependencies = .{
+        .zalgebra = .{
+            .url = "https://github.com/kooparse/zalgebra/archive/27013efdea89e6f9b838b088e916fe7e55a828fa.tar.gz",
+            .hash = "1220f4d39ae8a024b01bc4a141ccff9a410140a6f3630475b28f8ade34058eb1edb3",
+        }
+    }
+}

@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.root_module.addImport("zalgebra", zalgebra_dep.module("zalgebra"));
+    exe.root_module.addAnonymousImport("assets", .{ .root_source_file = .{ .path = "Content/assets.zig" } });
     exe.rdynamic = true;
     exe.entry = .disabled;
     b.installArtifact(exe);

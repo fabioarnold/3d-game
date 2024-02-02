@@ -107,6 +107,10 @@ const glGetUniformLocation = (programId, namePtr, nameLen) => {
   glUniformLocations.push(gl.getUniformLocation(glPrograms[programId], readCharStr(namePtr, nameLen)));
   return glUniformLocations.length - 1;
 };
+const jsGetUniformLocation = (programId, namePtr, nameLen) => {
+  glUniformLocations.push(gl.getUniformLocation(glPrograms[programId], readCharStr(namePtr, nameLen)));
+  return glUniformLocations.length - 1;
+};
 const glUniform4f = (locationId, x, y, z, w) => gl.uniform4fv(glUniformLocations[locationId], [x, y, z, w]);
 const glUniformMatrix4fv = (locationId, dataLen, transpose, dataPtr) => {
   const floats = new Float32Array(memory.buffer, dataPtr, dataLen * 16);
@@ -149,15 +153,16 @@ const glDeleteShader = (id) => {
 };
 const glBindBuffer = (type, bufferId) => gl.bindBuffer(type, glBuffers[bufferId]);
 const glBufferData = (type, count, dataPtr, drawType) => {
-  const floats = new Float32Array(memory.buffer, dataPtr, count);
-  gl.bufferData(type, floats, drawType);
+  const data = new Uint8Array(memory.buffer, dataPtr, count);
+  gl.bufferData(type, data, drawType);
 }
 const glUseProgram = (programId) => gl.useProgram(glPrograms[programId]);
 const glEnableVertexAttribArray = (x) => gl.enableVertexAttribArray(x);
 const glVertexAttribPointer = (attribLocation, size, type, normalize, stride, offset) => {
   gl.vertexAttribPointer(attribLocation, size, type, normalize, stride, offset);
 }
-const glDrawArrays = (type, offset, count) => gl.drawArrays(type, offset, count);
+const glDrawArrays = (mode, first, count) => gl.drawArrays(mode, first, count);
+const glDrawElements = (mode, count, type, offset) => gl.drawElements(mode, count, type, offset);
 const glCreateTexture = () => {
   glTextures.push(gl.createTexture());
   return glTextures.length - 1;
@@ -222,7 +227,7 @@ var webgl = {
   glBlendFunc,
   glClear,
   glGetAttribLocation,
-  glGetUniformLocation,
+  jsGetUniformLocation,
   glUniform4f,
   glUniformMatrix4fv,
   glUniform1i,
@@ -237,6 +242,7 @@ var webgl = {
   glEnableVertexAttribArray,
   glVertexAttribPointer,
   glDrawArrays,
+  glDrawElements,
   glCreateTexture,
   glGenTextures,
   glDeleteTextures,

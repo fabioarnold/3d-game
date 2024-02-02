@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const TokenIterator = std.mem.TokenIterator;
 const za = @import("zalgebra");
+const Vec3 = za.Vec3;
 const Vec3d = za.Vec3_f64;
 const logger = std.log.scoped(.quakemap);
 
@@ -95,9 +96,11 @@ fn closestAxis(v: Vec3d) Vec3d {
     return Vec3d.forward(); // 0 0 1
 }
 
-const Face = struct {
+pub const Face = struct {
     plane: Plane,
     texture_name: []const u8,
+    u_axis: Vec3,
+    v_axis: Vec3,
     shift_x: f32,
     shift_y: f32,
     rotation: f32,
@@ -217,6 +220,9 @@ fn readFace(allocator: Allocator, line: []const u8) !Face {
     const v2 = try readPoint(&iter);
     // map planes are clockwise, flip them around when computing the plane to get a counter-clockwise plane
     face.plane = Plane.initFromVertices(v2, v1, v0);
+    const direction = closestAxis(face.plane.normal);
+    face.u_axis = if (direction.x() == 1) Vec3.new(0, 1, 0) else Vec3.new(1, 0, 0);
+    face.v_axis = if (direction.z() == 1) Vec3.new(0, -1, 0) else Vec3.new(0, 0, -1);
     face.texture_name = try readSymbol(&iter);
     face.shift_x = try readDecimal(&iter);
     face.shift_y = try readDecimal(&iter);

@@ -34,12 +34,23 @@
       // ...canvas,
       // ...zigdom,
       ...webgl,
-      // setScore
     }
 
-    fetchAndInstantiate('zig-out/bin/main.wasm', { env }).then(instance => {
+    fetchAndInstantiate('zig-out/bin/main.wasm', { env }).then(async instance => {
       memory = instance.exports.memory;
-      instance.exports.onInit();
+
+      images = [];
+      let loadedImages = 0;
+      instance.exports.onLoadImages();
+      images.forEach(img => {
+        img.complete ? onImageLoaded() : img.addEventListener('load', onImageLoaded);
+      });
+      async function onImageLoaded() {
+        loadedImages++;
+        if (loadedImages === images.length) {
+          setTimeout(() => instance.exports.onImagesLoaded(), 0);
+        }
+      }
 
       function resize() {
         $canvasgl.width = window.devicePixelRatio * window.innerWidth;
@@ -51,16 +62,14 @@
       window.addEventListener('resize', resize, false);
       resize();
 
-      const onAnimationFrame = instance.exports.onAnimationFrame;
-
       document.addEventListener('keydown', e => instance.exports.onKeyDown(e.keyCode));
       // document.addEventListener('keyup', e => instance.exports.onKeyUp(e.keyCode, 0));
       // document.addEventListener('mousedown', e => instance.exports.onMouseDown(e.button, e.x, e.y));
       // document.addEventListener('mouseup', e => instance.exports.onMouseUp(e.button, e.x, e.y));
       // document.addEventListener('mousemove', e => instance.exports.onMouseMove(e.x, e.y));
-
+      
       function step(timestamp) {
-        onAnimationFrame(timestamp);
+        instance.exports.onAnimationFrame(timestamp);
         window.requestAnimationFrame(step);
       }
 

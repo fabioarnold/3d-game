@@ -27,6 +27,9 @@ if (!gl) {
     throw new Error("The browser does not support WebGL");
   }
 
+  if (!gl.getExtension("OES_element_index_uint")) {
+    throw new Error("The browser supports WebGL, but not the OES_element_index_uint extension");
+  }
   let vaoExt = gl.getExtension("OES_vertex_array_object");
   if (!vaoExt) {
     throw new Error("The browser supports WebGL, but not the OES_vertex_array_object extension");

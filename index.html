@@ -36,7 +36,7 @@
       ...webgl,
     }
 
-    fetchAndInstantiate('zig-out/bin/main.wasm', { env }).then(async instance => {
+    fetchAndInstantiate('zig-out/bin/main.wasm', { env }).then(instance => {
       memory = instance.exports.memory;
 
       images = [];
@@ -45,10 +45,10 @@
       images.forEach(img => {
         img.complete ? onImageLoaded() : img.addEventListener('load', onImageLoaded);
       });
-      async function onImageLoaded() {
+      function onImageLoaded() {
         loadedImages++;
         if (loadedImages === images.length) {
-          setTimeout(() => instance.exports.onImagesLoaded(), 0);
+          instance.exports.onImagesLoaded();
         }
       }
 

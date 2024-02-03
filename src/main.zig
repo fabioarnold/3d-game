@@ -42,7 +42,7 @@ export fn onImagesLoaded() void {
     gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(map.vertices.items.len * @sizeOf(f32)), @ptrCast(map.vertices.items.ptr), gl.GL_STATIC_DRAW);
     gl.glGenBuffers(1, &map_ibo);
     gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, map_ibo);
-    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(map.indices.items.len * @sizeOf(u16)), @ptrCast(map.indices.items.ptr), gl.GL_STATIC_DRAW);
+    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(map.indices.items.len * @sizeOf(u32)), @ptrCast(map.indices.items.ptr), gl.GL_STATIC_DRAW);
 
     const vert_src = @embedFile("shaders/transform.vert");
     const frag_src = @embedFile("shaders/color.frag");
@@ -114,7 +114,7 @@ export fn onAnimationFrame() void {
 
     for (map.materials.items) |material| {
         gl.glBindTexture(gl.GL_TEXTURE_2D, material.texture.id);
-        gl.glDrawElements(gl.GL_TRIANGLES, material.index_count, gl.GL_UNSIGNED_SHORT, material.index_start * @sizeOf(u16));
+        gl.glDrawElements(gl.GL_TRIANGLES, @intCast(material.index_count), gl.GL_UNSIGNED_INT, material.index_start * @sizeOf(u32));
     }
 
     // frame += 1;

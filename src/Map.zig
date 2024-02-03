@@ -19,8 +19,8 @@ const BoundingBox = struct {
 pub const Material = struct {
     texture_name: []const u8,
     texture: textures.Texture,
-    index_start: u16,
-    index_count: u16,
+    index_start: u32,
+    index_count: u32,
 };
 
 name: []const u8,
@@ -29,7 +29,7 @@ static_solids: std.ArrayList(BoundingBox),
 
 materials: std.ArrayList(Material),
 vertices: std.ArrayList(f32),
-indices: std.ArrayList(u16),
+indices: std.ArrayList(u32),
 
 pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
     var self: Map = .{
@@ -38,7 +38,7 @@ pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
         .static_solids = std.ArrayList(BoundingBox).init(allocator),
         .materials = std.ArrayList(Material).init(allocator),
         .vertices = std.ArrayList(f32).init(allocator),
-        .indices = std.ArrayList(u16).init(allocator),
+        .indices = std.ArrayList(u32).init(allocator),
     };
 
     var error_info: QuakeMap.ErrorInfo = undefined;
@@ -70,8 +70,8 @@ fn generateModel(self: *Map, allocator: Allocator, solids: []QuakeMap.Solid) !vo
     }
 
     for (self.materials.items) |*material| {
-        material.index_start = @intCast(self.indices.items.len);
-        defer material.index_count = @intCast(self.indices.items.len - material.index_start);
+        material.index_start = self.indices.items.len;
+        defer material.index_count = self.indices.items.len - material.index_start;
 
         const texture_size = Vec2.new(@floatFromInt(material.texture.width), @floatFromInt(material.texture.height));
 
@@ -81,7 +81,7 @@ fn generateModel(self: *Map, allocator: Allocator, solids: []QuakeMap.Solid) !vo
 
                 if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
 
-                const vertex_index: u16 = @intCast(self.vertices.items.len / 8);
+                const vertex_index = self.vertices.items.len / 8;
                 var u_axis: Vec3 = undefined;
                 var v_axis: Vec3 = undefined;
                 calculateRotatedUV(face, &u_axis, &v_axis);
@@ -107,12 +107,14 @@ fn generateModel(self: *Map, allocator: Allocator, solids: []QuakeMap.Solid) !vo
                 // add indices
                 for (0..face.vertices.items.len - 2) |i| {
                     try self.indices.append(vertex_index + 0);
-                    try self.indices.append(vertex_index + @as(u16, @intCast(i)) + 1);
-                    try self.indices.append(vertex_index + @as(u16, @intCast(i)) + 2);
+                    try self.indices.append(vertex_index + i + 1);
+                    try self.indices.append(vertex_index + i + 2);
                 }
             }
         }
     }
+
+    logger.info("generateModel: {} vertices {} indices", .{self.vertices.items.len / 8, self.indices.items.len});
 }
 
 fn calculateRotatedUV(face: QuakeMap.Face, u_axis: *Vec3, v_axis: *Vec3) void {

@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+  font-family: sans-serif;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+}
+#inspector {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 8px;
+  margin: 8px;
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 5px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+#inspector:empty {
+  display: none;
+}
+#inspector label {
+  display: inline-block;
+  width: 60px;
+  text-align: right;
+}
+#inspector .group input {
+  width: 65px;
+}
+#inspector input {
+  vertical-align: middle;
+}
+#inspector output {
+  display: inline-block;
+  width: 60px;
+  text-align: right;
+}

@@ -1,10 +1,12 @@
 const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
+const Mat3 = za.Mat3;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
 const keys = @import("web/keys.zig");
 const wasm = @import("web/wasm.zig");
+const inspector = @import("inspector.zig");
 const assets = @import("assets");
 const textures = @import("textures.zig");
 const Map = @import("Map.zig");
@@ -27,6 +29,41 @@ var loaded: bool = false;
 var map: Map = undefined;
 var map_vbo: gl.GLuint = undefined;
 var map_ibo: gl.GLuint = undefined;
+
+const Camera = struct {
+    position: Vec3,
+    angles: Vec3,
+    field_of_view: f32,
+    near_plane: f32,
+    far_plane: f32,
+
+    fn projection(self: Camera) Mat4 {
+        const ar = video_width / video_height;
+        return za.perspective(self.field_of_view, ar, self.near_plane, self.far_plane);
+    }
+
+    fn view(self: Camera) Mat4 {
+        const z_up = Mat4.fromRotation(90, Vec3.right());
+        const v = z_up.mul(Mat4.fromEulerAngles(self.angles)).translate(self.position);
+        return v.inv();
+    }
+
+    fn inspect(self: *Camera) void {
+        inspector.vec3("pos", &camera.position);
+        inspector.floatRange("rot_x", &camera.angles.data[0], -90, 90);
+        inspector.floatRange("rot_y", &camera.angles.data[1], -360, 360);
+        inspector.floatRange("fov", &camera.field_of_view, 30, 120);
+        inspector.float("near", &self.near_plane);
+        inspector.float("far", &self.far_plane);
+    }
+};
+var camera = Camera{
+    .position = Vec3.new(0, 0, 1000),
+    .angles = Vec3.new(0, 0, 0),
+    .field_of_view = 90, // Quake Pro
+    .near_plane = 1.0,
+    .far_plane = 10000.0,
+};
 
 export fn onLoadImages() void {
     textures.load();
@@ -54,13 +91,6 @@ export fn onImagesLoaded() void {
     texture_loc = gl.glGetUniformLocation(program, "texture");
     color_loc = gl.glGetUniformLocation(program, "color");
     gl.glUniform1i(texture_loc, 0);
-
-    // var buf: c_uint = undefined;
-    // gl.glGenBuffers(1, &buf);
-    // gl.glBindBuffer(gl.GL_ARRAY_BUFFER, buf);
-    // const vertex_data = @import("zig-mark.zig").positions;
-    // gl.glBufferData(gl.GL_ARRAY_BUFFER, vertex_data.len * @sizeOf(f32), &vertex_data, gl.GL_STATIC_DRAW);
-
 }
 
 export fn onResize(w: c_uint, h: c_uint, s: f32) void {
@@ -70,30 +100,45 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
 }
 
-var cam_x: f32 = 0;
-var cam_y: f32 = -600;
 export fn onKeyDown(key: c_uint) void {
-    switch (key) {
-        keys.KEY_LEFT => cam_x -= 10,
-        keys.KEY_RIGHT => cam_x += 10,
-        keys.KEY_DOWN => cam_y -= 10,
-        keys.KEY_UP => cam_y += 10,
-        else => {},
-    }
+    _ = key;
+}
+export fn onKeyUp(key: c_uint) void {
+    _ = key;
+}
+export fn onMouseMove(x: c_int, y: c_int) void {
+    var dx: f32 = @floatFromInt(y);
+    var dy: f32 = @floatFromInt(x);
+    dx *= -0.3;
+    dy *= -0.3;
+    camera.angles.data[0] = std.math.clamp(camera.angles.x() + dx, -90, 90);
+    camera.angles.data[1] = std.math.wrap(camera.angles.y() + dy, 360);
 }
 
-var frame: usize = 0;
 export fn onAnimationFrame() void {
-    gl.glClearColor(0.5, 0.5, 0.5, 1);
+    gl.glClearColor(1, 1, 1, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
     if (!loaded) return;
 
-    const projection = za.perspective(45.0, video_width / video_height, 0.1, 10000.0);
-    const view = Mat4.fromTranslate(Vec3.new(cam_x, cam_y, -3000));
-    const zUp = Mat4.fromRotation(-90, Vec3.right());
-    const rot_anim = Mat4.fromRotation(0.2 * @as(f32, @floatFromInt(frame)), Vec3.up());
-    const model = rot_anim.mul(Mat4.fromTranslate(Vec3.new(0, 0, 0)).mul(zUp));
+    const speed: f32 = if (wasm.isKeyDown(keys.KEY_SHIFT)) 100 else 20;
+    var move = Vec3.zero();
+    if (wasm.isKeyDown(keys.KEY_W)) move.data[1] += speed;
+    if (wasm.isKeyDown(keys.KEY_A)) move.data[0] -= speed;
+    if (wasm.isKeyDown(keys.KEY_S)) move.data[1] -= speed;
+    if (wasm.isKeyDown(keys.KEY_D)) move.data[0] += speed;
+    const rot_x = Mat3.fromRotation(camera.angles.x(), Vec3.new(1, 0, 0));
+    const rot_z = Mat3.fromRotation(camera.angles.y(), Vec3.new(0, 0, 1));
+    move = rot_z.mul(rot_x).mulByVec3(move);
+    if (wasm.isKeyDown(keys.KEY_Q)) move.data[2] -= speed;
+    if (wasm.isKeyDown(keys.KEY_E)) move.data[2] += speed;
+    camera.position = camera.position.add(move);
+
+    camera.inspect();
+
+    const projection = camera.projection();
+    const view = camera.view();
+    const model = Mat4.identity();
 
     const mvp = projection.mul(view.mul(model));
     gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
@@ -104,13 +149,6 @@ export fn onAnimationFrame() void {
     gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
     gl.glEnableVertexAttribArray(2);
     gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(5 * @sizeOf(gl.GLfloat)));
-
-    // gl.glUniform4f(color_loc, 0.97, 0.64, 0.11, 1);
-    // gl.glDrawArrays(gl.GL_TRIANGLES, 0, 120);
-    // gl.glUniform4f(color_loc, 0.98, 0.82, 0.6, 1);
-    // gl.glDrawArrays(gl.GL_TRIANGLES, 120, 66);
-    // gl.glUniform4f(color_loc, 0.6, 0.35, 0.02, 1);
-    // gl.glDrawArrays(gl.GL_TRIANGLES, 186, 90);
 
     for (map.materials.items) |material| {
         gl.glBindTexture(gl.GL_TEXTURE_2D, material.texture.id);

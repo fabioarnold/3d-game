@@ -31,3 +31,9 @@ pub fn log(
 
     wasm_log_flush();
 }
+
+pub extern fn isKeyDown(key: u32) bool;
+
+pub extern fn inspectFloat(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32) void;
+pub extern fn inspectFloatRange(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32, min: f32, max: f32) void;
+pub extern fn inspectVec3(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32) void;

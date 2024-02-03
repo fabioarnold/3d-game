@@ -1,88 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello WebGL</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
 
-<head>
-  <meta charset="utf-8">
-  <title>Hello WebGL</title>
-  <!-- <link rel="stylesheet" href="style.css"> -->
-  <style type="text/css">
-    body {
-      margin: 0;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-    }
-  </style>
-</head>
+  <body>
+    <canvas id="canvasgl"></canvas>
+    <div id="inspector"></div>
+    <script>
+      var $canvasgl = document.getElementById("canvasgl");
+    </script>
+    <!-- <script src="js/dom.js"></script> -->
+    <!-- <script src="js/audio.js"></script> -->
+    <!-- <script src="js/canvas.js"></script> -->
+    <script src="js/webgl.js"></script>
+    <script src="js/wasm.js"></script>
+    <script src="js/inspector.js"></script>
+    <script>
+      const env = {
+        ...wasm,
+        ...inspector,
+        // ...audio,
+        // ...canvas,
+        // ...zigdom,
+        ...webgl,
+        isKeyDown,
+      };
 
-<body>
-  <canvas id="canvasgl"></canvas>
-  <!-- <canvas id="canvas2d"></canvas> -->
-  <script>
-    var $canvasgl = document.getElementById("canvasgl");
-  </script>
-  <!-- <script src="js/dom.js"></script> -->
-  <!-- <script src="js/audio.js"></script> -->
-  <!-- <script src="js/canvas.js"></script> -->
-  <script src="js/webgl.js"></script>
-  <script src="js/wasm.js"></script>
-  <script>
-    const env = {
-      ...wasm,
-      // ...audio,
-      // ...canvas,
-      // ...zigdom,
-      ...webgl,
-    }
+      let keyState = [];
+      function isKeyDown(keyCode) {
+        return keyState[keyCode] === true;
+      }
 
-    fetchAndInstantiate('zig-out/bin/main.wasm', { env }).then(instance => {
-      memory = instance.exports.memory;
+      fetchAndInstantiate("zig-out/bin/main.wasm", { env }).then((instance) => {
+        memory = instance.exports.memory;
 
-      images = [];
-      let loadedImages = 0;
-      instance.exports.onLoadImages();
-      images.forEach(img => {
-        img.complete ? onImageLoaded() : img.addEventListener('load', onImageLoaded);
-      });
-      function onImageLoaded() {
-        loadedImages++;
-        if (loadedImages === images.length) {
-          instance.exports.onImagesLoaded();
+        images = [];
+        let loadedImages = 0;
+        instance.exports.onLoadImages();
+        images.forEach((img) => {
+          img.complete ? onImageLoaded() : img.addEventListener("load", onImageLoaded);
+        });
+        function onImageLoaded() {
+          loadedImages++;
+          if (loadedImages === images.length) {
+            instance.exports.onImagesLoaded();
+          }
         }
-      }
 
-      function resize() {
-        $canvasgl.width = window.devicePixelRatio * window.innerWidth;
-        $canvasgl.height = window.devicePixelRatio * window.innerHeight;
-        $canvasgl.style.width = window.innerWidth + "px";
-        $canvasgl.style.height = window.innerHeight + "px";
-        instance.exports.onResize(window.innerWidth, window.innerHeight, window.devicePixelRatio);
-      }
-      window.addEventListener('resize', resize, false);
-      resize();
+        function resize() {
+          $canvasgl.width = window.devicePixelRatio * window.innerWidth;
+          $canvasgl.height = window.devicePixelRatio * window.innerHeight;
+          $canvasgl.style.width = window.innerWidth + "px";
+          $canvasgl.style.height = window.innerHeight + "px";
+          instance.exports.onResize(window.innerWidth, window.innerHeight, window.devicePixelRatio);
+        }
+        window.addEventListener("resize", resize, false);
+        resize();
 
-      document.addEventListener('keydown', e => instance.exports.onKeyDown(e.keyCode));
-      // document.addEventListener('keyup', e => instance.exports.onKeyUp(e.keyCode, 0));
-      // document.addEventListener('mousedown', e => instance.exports.onMouseDown(e.button, e.x, e.y));
-      // document.addEventListener('mouseup', e => instance.exports.onMouseUp(e.button, e.x, e.y));
-      // document.addEventListener('mousemove', e => instance.exports.onMouseMove(e.x, e.y));
-      
-      function step(timestamp) {
-        instance.exports.onAnimationFrame(timestamp);
+        $canvasgl.addEventListener("mousedown", async () => {
+          await $canvasgl.requestPointerLock();
+        });
+        $canvasgl.addEventListener("mousemove", (e) => {
+          if (document.pointerLockElement === $canvasgl) {
+            instance.exports.onMouseMove(e.movementX, e.movementY);
+          }
+        });
+        $canvasgl.addEventListener("mouseup", () => {
+          if (document.pointerLockElement === $canvasgl) {
+            document.exitPointerLock();
+          }
+        });
+
+        document.addEventListener("keydown", (e) => {
+          keyState[e.keyCode] = true;
+          instance.exports.onKeyDown(e.keyCode);
+        });
+        document.addEventListener("keyup", (e) => {
+          keyState[e.keyCode] = false;
+          instance.exports.onKeyUp(e.keyCode);
+        });
+        // document.addEventListener('mousedown', e => instance.exports.onMouseDown(e.button, e.x, e.y));
+        // document.addEventListener('mouseup', e => instance.exports.onMouseUp(e.button, e.x, e.y));
+        // document.addEventListener('mousemove', e => instance.exports.onMouseMove(e.x, e.y));
+
+        function step(timestamp) {
+          instance.exports.onAnimationFrame(timestamp);
+          window.requestAnimationFrame(step);
+        }
+
         window.requestAnimationFrame(step);
+      });
+
+      function fetchAndInstantiate(url, importObject) {
+        return fetch(url)
+          .then((response) => response.arrayBuffer())
+          .then((bytes) => WebAssembly.instantiate(bytes, importObject))
+          .then((results) => results.instance);
       }
-
-      window.requestAnimationFrame(step);
-    });
-
-    function fetchAndInstantiate(url, importObject) {
-      return fetch(url)
-        .then(response => response.arrayBuffer())
-        .then(bytes => WebAssembly.instantiate(bytes, importObject))
-        .then(results => results.instance);
-    }
-  </script>
-</body>
-
+    </script>
+  </body>
 </html>

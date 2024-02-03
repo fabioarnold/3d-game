@@ -49,6 +49,7 @@ pub const GL_CW = 0x0900;
 pub const GL_CCW = 0x0901;
 pub const GL_FRONT = 0x0404;
 pub const GL_BACK = 0x0405;
+pub const GL_FRONT_AND_BACK = 0x0408;
 pub const GL_CULL_FACE = 0x0B44;
 
 // Depth buffer
@@ -145,6 +146,7 @@ pub const GL_UNPACK_ALIGNMENT = 0x0CF5;
 pub extern fn glClearColor(red: GLclampf, green: GLclampf, blue: GLclampf, alpha: GLclampf) void;
 pub extern fn glClear(mask: GLbitfield) void;
 pub extern fn glColorMask(red: GLboolean, green: GLboolean, blue: GLboolean, alpha: GLboolean) void;
+pub extern fn glDepthMask(flag: GLboolean) void;
 pub extern fn glCullFace(mode: GLenum) void;
 pub extern fn glFrontFace(mode: GLenum) void;
 pub extern fn glEnable(cap: GLenum) void;

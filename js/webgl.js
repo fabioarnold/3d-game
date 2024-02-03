@@ -115,6 +115,9 @@ function jsLoadTexturePNG(dataPtr, dataLen, widthPtr, heightPtr) {
 const glViewport = (x, y, width, height) => gl.viewport(x, y, width, height);
 const glClearColor = (r, g, b, a) => gl.clearColor(r, g, b, a);
 const glEnable = (x) => gl.enable(x);
+const glDisable = (x) => gl.disable(x);
+const glCullFace = (x) => gl.cullFace(x);
+const glDepthMask = (x) => gl.depthMask(x);
 const glDepthFunc = (x) => gl.depthFunc(x);
 const glBlendFunc = (x, y) => gl.blendFunc(x, y);
 const glClear = (x) => gl.clear(x);
@@ -240,6 +243,9 @@ var webgl = {
   glViewport,
   glClearColor,
   glEnable,
+  glDisable,
+  glCullFace,
+  glDepthMask,
   glDepthFunc,
   glBlendFunc,
   glClear,

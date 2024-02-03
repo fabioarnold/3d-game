@@ -5,6 +5,8 @@ const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
 const Vec4 = za.Vec4;
 const Mat3 = za.Mat3;
+const Mat4 = za.Mat4;
+const gl = @import("web/webgl.zig");
 const QuakeMap = @import("QuakeMap.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
@@ -31,6 +33,9 @@ materials: std.ArrayList(Material),
 vertices: std.ArrayList(f32),
 indices: std.ArrayList(u32),
 
+vertex_buffer: gl.GLuint,
+index_buffer: gl.GLuint,
+
 pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
     var self: Map = .{
         .name = name,
@@ -39,6 +44,8 @@ pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
         .materials = std.ArrayList(Material).init(allocator),
         .vertices = std.ArrayList(f32).init(allocator),
         .indices = std.ArrayList(u32).init(allocator),
+        .vertex_buffer = undefined,
+        .index_buffer = undefined,
     };
 
     var error_info: QuakeMap.ErrorInfo = undefined;
@@ -50,6 +57,13 @@ pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
     self.skybox = try quake_map.worldspawn.getStringProperty("skybox");
 
     try self.generateModel(allocator, quake_map.worldspawn.solids.items);
+
+    gl.glGenBuffers(1, &self.vertex_buffer);
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
+    gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(self.vertices.items.len * @sizeOf(f32)), @ptrCast(self.vertices.items.ptr), gl.GL_STATIC_DRAW);
+    gl.glGenBuffers(1, &self.index_buffer);
+    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
+    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(self.indices.items.len * @sizeOf(u32)), @ptrCast(self.indices.items.ptr), gl.GL_STATIC_DRAW);
 
     return self;
 }
@@ -131,4 +145,22 @@ fn closestAxis(v: Vec3) Vec3 {
     if (@abs(v.x()) >= @abs(v.y()) and @abs(v.x()) >= @abs(v.z())) return Vec3.right(); // 1 0 0
     if (@abs(v.y()) >= @abs(v.z())) return Vec3.up(); // 0 1 0
     return Vec3.forward(); // 0 0 1
+}
+
+pub fn draw(self: Map, mvp_loc: gl.GLint, view_projection: Mat4) void {
+    gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
+    gl.glEnableVertexAttribArray(0);
+    gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), null);
+    gl.glEnableVertexAttribArray(1);
+    gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
+    gl.glEnableVertexAttribArray(2);
+    gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(5 * @sizeOf(gl.GLfloat)));
+
+    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
+    for (self.materials.items) |material| {
+        gl.glBindTexture(gl.GL_TEXTURE_2D, material.texture.id);
+        gl.glDrawElements(gl.GL_TRIANGLES, @intCast(material.index_count), gl.GL_UNSIGNED_INT, material.index_start * @sizeOf(u32));
+    }
 }

@@ -91,8 +91,8 @@ export fn onKeyUp(key: c_uint) void {
 export fn onMouseMove(x: c_int, y: c_int) void {
     var dx: f32 = @floatFromInt(y);
     var dy: f32 = @floatFromInt(x);
-    dx *= -0.3;
-    dy *= -0.3;
+    dx *= -0.25;
+    dy *= 0.25;
     camera.angles.data[0] = std.math.clamp(camera.angles.x() + dx, -90, 90);
     camera.angles.data[1] = std.math.wrap(camera.angles.y() + dy, 360);
 }

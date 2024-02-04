@@ -85,6 +85,7 @@ pub const Solid = struct {
             for (self.faces.items, 0..) |clip_face, j| {
                 if (j == i) continue;
                 try face.clip(clip_face.plane);
+                if (face.vertices.items.len < 3) return error.DegenerateFace;
             }
         }
     }
@@ -128,20 +129,59 @@ pub const Face = struct {
         self.vertices.appendAssumeCapacity(origin.sub(right).add(up));
     }
 
-    fn clip(self: *Face, plane: Plane) !void {
-        var clipped = std.ArrayList(Vec3d).init(self.vertices.allocator);
+    fn clip(self: *Face, clip_plane: Plane) !void {
+        const epsilon = 0.0001;
 
-        for (0..self.vertices.items.len) |i| {
-            const v0 = self.vertices.items[i];
-            const v0d: f64 = plane.normal.dot(v0) + plane.d;
-            if (v0d < 0) {
-                try clipped.append(v0);
+        var distances = std.ArrayList(f64).init(self.vertices.allocator);
+        defer distances.deinit();
+        var cb: usize = 0;
+        var cf: usize = 0;
+        for (self.vertices.items) |vertex| {
+            var distance = clip_plane.normal.dot(vertex) + clip_plane.d;
+            if (distance < -epsilon) {
+                cb += 1;
+            } else if (distance > epsilon) {
+                cf += 1;
+            } else {
+                distance = 0;
             }
-            const v1 = self.vertices.items[(i + 1) % self.vertices.items.len];
-            const v1d = plane.normal.dot(v1) + plane.d;
-            if ((v0d < 0 and v1d > 0) or (v0d > 0 and v1d < 0)) {
-                const t = v0d / (v0d - v1d);
-                try clipped.append(Vec3d.lerp(v0, v1, t));
+            try distances.append(distance);
+        }
+
+        if (cb == 0 and cf == 0) {
+            // co-planar
+            self.vertices.clearRetainingCapacity();
+            return;
+        } else if (cb == 0) {
+            // all vertices in front
+            self.vertices.clearRetainingCapacity();
+            return;
+        } else if (cf == 0) {
+            // all vertices in back;
+            // keep
+            return;
+        }
+
+        var clipped = std.ArrayList(Vec3d).init(self.vertices.allocator);
+        for (self.vertices.items, 0..) |s, i| {
+            const j = (i + 1) % self.vertices.items.len;
+
+            const e = self.vertices.items[j];
+            const sd = distances.items[i];
+            const ed = distances.items[j];
+            if (sd <= 0) try clipped.append(s); // back
+
+            if ((sd < 0 and ed > 0) or (ed < 0 and sd > 0)) {
+                const t = sd / (sd - ed);
+                var intersect = Vec3d.lerp(s, e, t);
+                // use plane's distance from origin, if plane's normal is a unit vector
+                if (clip_plane.normal.x() == 1) intersect.data[0] = -clip_plane.d;
+                if (clip_plane.normal.x() == -1) intersect.data[0] = clip_plane.d;
+                if (clip_plane.normal.y() == 1) intersect.data[1] = -clip_plane.d;
+                if (clip_plane.normal.y() == -1) intersect.data[1] = clip_plane.d;
+                if (clip_plane.normal.z() == 1) intersect.data[2] = -clip_plane.d;
+                if (clip_plane.normal.z() == -1) intersect.data[2] = clip_plane.d;
+                try clipped.append(intersect);
             }
         }
 

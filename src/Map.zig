@@ -91,8 +91,6 @@ fn generateModel(self: *Map, allocator: Allocator, solids: []QuakeMap.Solid) !vo
 
         for (solids) |solid| {
             for (solid.faces.items) |face| {
-                if (face.vertices.items.len < 3) continue; // TODO: investigate
-
                 if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
 
                 const vertex_index = self.vertices.items.len / 8;

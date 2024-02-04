@@ -1,5 +1,13 @@
 {
     "triggerTaskOnSave.tasks": {
-        "build web": ["src/**/*.zig"]
-    }
+        "build web": ["src/**/*.zig", "src/shaders/**/*.vert", "src/shaders/**/*.frag"]
+    },
+    "liveServer.settings.ignoreFiles": [
+        "Content/**",
+        "src/**",
+        "zig-cache/**",
+        ".vscode/**",
+        "**/*.zig",
+    ],
+    "liveServer.settings.NoBrowser": true
 }

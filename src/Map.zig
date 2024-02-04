@@ -28,24 +28,14 @@ pub const Material = struct {
 name: []const u8,
 skybox: []const u8,
 static_solids: std.ArrayList(BoundingBox),
-
-materials: std.ArrayList(Material),
-vertices: std.ArrayList(f32),
-indices: std.ArrayList(u32),
-
-vertex_buffer: gl.GLuint,
-index_buffer: gl.GLuint,
+models: std.ArrayList(Model),
 
 pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
-    var self: Map = .{
+    var self = Map{
         .name = name,
         .skybox = undefined,
         .static_solids = std.ArrayList(BoundingBox).init(allocator),
-        .materials = std.ArrayList(Material).init(allocator),
-        .vertices = std.ArrayList(f32).init(allocator),
-        .indices = std.ArrayList(u32).init(allocator),
-        .vertex_buffer = undefined,
-        .index_buffer = undefined,
+        .models = std.ArrayList(Model).init(allocator),
     };
 
     var error_info: QuakeMap.ErrorInfo = undefined;
@@ -56,77 +46,20 @@ pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
 
     self.skybox = try quake_map.worldspawn.getStringProperty("skybox");
 
-    try self.generateModel(allocator, quake_map.worldspawn.solids.items);
+    try self.models.append(try Model.fromSolids(allocator, quake_map.worldspawn.solids.items));
 
-    gl.glGenBuffers(1, &self.vertex_buffer);
-    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
-    gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(self.vertices.items.len * @sizeOf(f32)), @ptrCast(self.vertices.items.ptr), gl.GL_STATIC_DRAW);
-    gl.glGenBuffers(1, &self.index_buffer);
-    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
-    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(self.indices.items.len * @sizeOf(u32)), @ptrCast(self.indices.items.ptr), gl.GL_STATIC_DRAW);
+    var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
+    for (quake_map.entities.items) |entity| {
+        if (std.mem.eql(u8, entity.classname, "Decoration")) {
+            try decoration_solids.appendSlice(entity.solids.items);
+        } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
+            // TODO: move those up and down
+            try decoration_solids.appendSlice(entity.solids.items);
+        }
+    }
+    try self.models.append(try Model.fromSolids(allocator, decoration_solids.items));
 
     return self;
-}
-
-fn generateModel(self: *Map, allocator: Allocator, solids: []QuakeMap.Solid) !void {
-    var used = std.StringHashMap(void).init(allocator);
-    // find all used materials
-    for (solids) |solid| {
-        for (solid.faces.items) |face| {
-            if (!used.contains(face.texture_name)) {
-                try used.put(face.texture_name, {});
-                var material: Material = undefined;
-                material.texture_name = face.texture_name;
-                material.texture = textures.findByName(face.texture_name);
-                try self.materials.append(material);
-            }
-        }
-    }
-
-    for (self.materials.items) |*material| {
-        material.index_start = self.indices.items.len;
-        defer material.index_count = self.indices.items.len - material.index_start;
-
-        const texture_size = Vec2.new(@floatFromInt(material.texture.width), @floatFromInt(material.texture.height));
-
-        for (solids) |solid| {
-            for (solid.faces.items) |face| {
-                if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
-
-                const vertex_index = self.vertices.items.len / 8;
-                var u_axis: Vec3 = undefined;
-                var v_axis: Vec3 = undefined;
-                calculateRotatedUV(face, &u_axis, &v_axis);
-
-                // add face vertices
-                const n = face.plane.normal.cast(f32);
-                for (face.vertices.items) |vertex| {
-                    const pos = vertex.cast(f32);
-                    const uv = Vec2.new(
-                        (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
-                        (v_axis.dot(pos) + face.shift_y) / texture_size.y(),
-                    );
-                    try self.vertices.append(pos.x());
-                    try self.vertices.append(pos.y());
-                    try self.vertices.append(pos.z());
-                    try self.vertices.append(uv.x());
-                    try self.vertices.append(uv.y());
-                    try self.vertices.append(n.x());
-                    try self.vertices.append(n.y());
-                    try self.vertices.append(n.z());
-                }
-
-                // add indices
-                for (0..face.vertices.items.len - 2) |i| {
-                    try self.indices.append(vertex_index + 0);
-                    try self.indices.append(vertex_index + i + 1);
-                    try self.indices.append(vertex_index + i + 2);
-                }
-            }
-        }
-    }
-
-    logger.info("generateModel: {} vertices {} indices", .{self.vertices.items.len / 8, self.indices.items.len});
 }
 
 fn calculateRotatedUV(face: QuakeMap.Face, u_axis: *Vec3, v_axis: *Vec3) void {
@@ -148,17 +81,109 @@ fn closestAxis(v: Vec3) Vec3 {
 pub fn draw(self: Map, mvp_loc: gl.GLint, view_projection: Mat4) void {
     gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
 
-    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
-    gl.glEnableVertexAttribArray(0);
-    gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), null);
-    gl.glEnableVertexAttribArray(1);
-    gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
-    gl.glEnableVertexAttribArray(2);
-    gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(5 * @sizeOf(gl.GLfloat)));
-
-    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
-    for (self.materials.items) |material| {
-        gl.glBindTexture(gl.GL_TEXTURE_2D, material.texture.id);
-        gl.glDrawElements(gl.GL_TRIANGLES, @intCast(material.index_count), gl.GL_UNSIGNED_INT, material.index_start * @sizeOf(u32));
+    for (self.models.items) |model| {
+        model.draw();
     }
 }
+
+const Model = struct {
+    materials: std.ArrayList(Material),
+    vertex_buffer: gl.GLuint,
+    index_buffer: gl.GLuint,
+
+    fn fromSolids(allocator: Allocator, solids: []const QuakeMap.Solid) !Model {
+        var self = Model{
+            .materials = std.ArrayList(Material).init(allocator),
+            .vertex_buffer = undefined,
+            .index_buffer = undefined,
+        };
+        var vertices = std.ArrayList(f32).init(allocator);
+        var indices = std.ArrayList(u32).init(allocator);
+
+        {
+            var used = std.StringHashMap(void).init(allocator);
+            // find all used materials
+            for (solids) |solid| {
+                for (solid.faces.items) |face| {
+                    if (!used.contains(face.texture_name)) {
+                        try used.put(face.texture_name, {});
+                        var material: Material = undefined;
+                        material.texture_name = face.texture_name;
+                        material.texture = textures.findByName(face.texture_name);
+                        try self.materials.append(material);
+                    }
+                }
+            }
+
+            for (self.materials.items) |*material| {
+                material.index_start = indices.items.len;
+                defer material.index_count = indices.items.len - material.index_start;
+
+                const texture_size = Vec2.new(@floatFromInt(material.texture.width), @floatFromInt(material.texture.height));
+
+                for (solids) |solid| {
+                    for (solid.faces.items) |face| {
+                        if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
+
+                        const vertex_index = vertices.items.len / 8;
+                        var u_axis: Vec3 = undefined;
+                        var v_axis: Vec3 = undefined;
+                        calculateRotatedUV(face, &u_axis, &v_axis);
+
+                        // add face vertices
+                        const n = face.plane.normal.cast(f32);
+                        for (face.vertices.items) |vertex| {
+                            const pos = vertex.cast(f32);
+                            const uv = Vec2.new(
+                                (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
+                                (v_axis.dot(pos) + face.shift_y) / texture_size.y(),
+                            );
+                            try vertices.append(pos.x());
+                            try vertices.append(pos.y());
+                            try vertices.append(pos.z());
+                            try vertices.append(uv.x());
+                            try vertices.append(uv.y());
+                            try vertices.append(n.x());
+                            try vertices.append(n.y());
+                            try vertices.append(n.z());
+                        }
+
+                        // add indices
+                        for (0..face.vertices.items.len - 2) |i| {
+                            try indices.append(vertex_index + 0);
+                            try indices.append(vertex_index + i + 1);
+                            try indices.append(vertex_index + i + 2);
+                        }
+                    }
+                }
+            }
+
+            logger.info("generateModel: {} vertices {} indices", .{ vertices.items.len / 8, indices.items.len });
+        }
+
+        gl.glGenBuffers(1, &self.vertex_buffer);
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
+        gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(vertices.items.len * @sizeOf(f32)), @ptrCast(vertices.items.ptr), gl.GL_STATIC_DRAW);
+        gl.glGenBuffers(1, &self.index_buffer);
+        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
+        gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(indices.items.len * @sizeOf(u32)), @ptrCast(indices.items.ptr), gl.GL_STATIC_DRAW);
+
+        return self;
+    }
+
+    pub fn draw(self: Model) void {
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
+        gl.glEnableVertexAttribArray(0);
+        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), null);
+        gl.glEnableVertexAttribArray(1);
+        gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
+        gl.glEnableVertexAttribArray(2);
+        gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(5 * @sizeOf(gl.GLfloat)));
+
+        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
+        for (self.materials.items) |material| {
+            gl.glBindTexture(gl.GL_TEXTURE_2D, material.texture.id);
+            gl.glDrawElements(gl.GL_TRIANGLES, @intCast(material.index_count), gl.GL_UNSIGNED_INT, material.index_start * @sizeOf(u32));
+        }
+    }
+};

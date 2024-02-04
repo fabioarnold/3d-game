@@ -117,10 +117,10 @@ export fn onMouseMove(x: c_int, y: c_int) void {
 }
 
 export fn onAnimationFrame() void {
+    if (!loaded) return;
+
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
-
-    if (!loaded) return;
 
     state.camera.handleKeys();
     state.camera.inspect();

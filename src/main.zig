@@ -50,6 +50,8 @@ export fn onImagesLoaded() void {
     gl.glEnable(gl.GL_DEPTH_TEST);
     gl.glEnable(gl.GL_CULL_FACE);
 
+    textures.updateParameters();
+
     map = Map.load(allocator, "1", assets.maps.map1) catch unreachable;
     skybox = Skybox.load("skybox_city");
 

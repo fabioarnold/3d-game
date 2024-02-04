@@ -17,6 +17,14 @@ pub fn load() void {
     }
 }
 
+pub fn updateParameters() void {
+    for (textures) |texture| {
+        gl.glBindTexture(gl.GL_TEXTURE_2D, texture.id);
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST);
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST_MIPMAP_NEAREST);
+    }
+}
+
 pub fn findByName(name: []const u8) Texture {
     inline for (@typeInfo(assets.textures).Struct.decls, 0..) |decl, i| {
         if (std.mem.eql(u8, decl.name, name)) return textures[i];

@@ -1,3 +1,4 @@
+const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat3 = za.Mat3;
@@ -9,12 +10,12 @@ const inspector = @import("inspector.zig");
 
 const Camera = @This();
 
-position: Vec3,
-angles: Vec3, // yaw, pitch, roll
-field_of_view: f32,
-aspect_ratio: f32,
-near_plane: f32,
-far_plane: f32,
+position: Vec3 = Vec3.zero(),
+angles: Vec3 = Vec3.zero(), // yaw, pitch, roll
+field_of_view: f32 = 60,
+aspect_ratio: f32 = 16.0/9.0,
+near_plane: f32 = 1,
+far_plane: f32 = 10000,
 
 pub fn projection(self: Camera) Mat4 {
     return za.perspective(self.field_of_view, self.aspect_ratio, self.near_plane, self.far_plane);
@@ -33,7 +34,7 @@ pub fn view(self: Camera) Mat4 {
     return v.inv();
 }
 
-pub fn handleInput(self: *Camera) void {
+pub fn handleKeys(self: *Camera) void {
     const speed: f32 = if (wasm.isKeyDown(keys.KEY_SHIFT)) 100 else 20;
     var move = Vec3.zero();
     if (wasm.isKeyDown(keys.KEY_W)) move.data[1] += speed;
@@ -46,6 +47,11 @@ pub fn handleInput(self: *Camera) void {
     if (wasm.isKeyDown(keys.KEY_Q)) move.data[2] -= speed;
     if (wasm.isKeyDown(keys.KEY_E)) move.data[2] += speed;
     self.position = self.position.add(move);
+}
+
+pub fn rotateView(self: *Camera, dx: f32, dy: f32) void {
+    self.angles.data[0] = std.math.clamp(self.angles.x() + dx, -90, 90);
+    self.angles.data[1] = std.math.wrap(self.angles.y() + dy, 360);
 }
 
 pub fn inspect(self: *Camera) void {

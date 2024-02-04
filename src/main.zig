@@ -17,20 +17,18 @@ pub const std_options = struct {
     pub const logFn = wasm.log;
 };
 
+const logger = std.log.scoped(.main);
+
 const allocator = std.heap.wasm_allocator;
 
 var video_width: f32 = 1280;
 var video_height: f32 = 720;
 var video_scale: f32 = 1;
 
-var camera = Camera{
-    .position = Vec3.new(0, 0, 0),
-    .angles = Vec3.new(0, 0, 0),
-    .aspect_ratio = 16.0 / 9.0,
-    .field_of_view = 90, // Quake Pro
-    .near_plane = 1.0,
-    .far_plane = 10000.0,
+const State = struct {
+    camera: Camera = .{},
 };
+var state: State = .{};
 
 var textured_shader: gl.GLuint = undefined;
 var textured_mvp_loc: gl.GLint = undefined;
@@ -74,12 +72,34 @@ export fn onImagesLoaded() void {
     gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "texture"), 0);
 }
 
+export fn onLoadSnapshot(handle: wasm.String.Handle) void {
+    const string = wasm.String.get(handle);
+    defer wasm.String.dealloc(handle);
+    const parsed = std.json.parseFromSlice(State, allocator, string, .{.ignore_unknown_fields=true}) catch |e| {
+        logger.err("Snapshot loading failed {}", .{e});
+        return;
+    };
+    defer parsed.deinit();
+    state = parsed.value;
+
+}
+
+export fn onSaveSnapshot() wasm.String.Handle {
+    var array = std.ArrayList(u8).init(allocator);
+    std.json.stringify(state, .{}, array.writer()) catch |e| {
+        logger.err("Snapshot saving failed {}", .{e});
+        return wasm.String.invalid;
+    };
+    logger.info("snapshot: {s}", .{array.items});
+    return wasm.String.fromSlice(array.items);
+}
+
 export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     video_width = @floatFromInt(w);
     video_height = @floatFromInt(h);
     video_scale = s;
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
-    camera.aspect_ratio = video_width / video_height;
+    state.camera.aspect_ratio = video_width / video_height;
 }
 
 export fn onKeyDown(key: c_uint) void {
@@ -89,12 +109,9 @@ export fn onKeyUp(key: c_uint) void {
     _ = key;
 }
 export fn onMouseMove(x: c_int, y: c_int) void {
-    var dx: f32 = @floatFromInt(y);
-    var dy: f32 = @floatFromInt(x);
-    dx *= -0.25;
-    dy *= 0.25;
-    camera.angles.data[0] = std.math.clamp(camera.angles.x() + dx, -90, 90);
-    camera.angles.data[1] = std.math.wrap(camera.angles.y() + dy, 360);
+    const dx: f32 = @floatFromInt(y);
+    const dy: f32 = @floatFromInt(x);
+    state.camera.rotateView(dx * -0.25, dy * 0.25);
 }
 
 export fn onAnimationFrame() void {
@@ -103,11 +120,11 @@ export fn onAnimationFrame() void {
 
     if (!loaded) return;
 
-    camera.handleInput();
-    camera.inspect();
+    state.camera.handleKeys();
+    state.camera.inspect();
 
-    const projection = camera.projection();
-    const view = camera.view();
+    const projection = state.camera.projection();
+    const view = state.camera.view();
     const view_projection = projection.mul(view);
 
     {
@@ -115,7 +132,7 @@ export fn onAnimationFrame() void {
         gl.glDisable(gl.GL_DEPTH_TEST);
         gl.glDepthMask(gl.GL_FALSE);
         gl.glCullFace(gl.GL_FRONT);
-        const mvp = view_projection.mul(Mat4.fromTranslate(camera.position));
+        const mvp = view_projection.mul(Mat4.fromTranslate(state.camera.position));
         skybox.draw(textured_unlit_mvp_loc, mvp, 300);
         gl.glCullFace(gl.GL_BACK);
         gl.glDepthMask(gl.GL_TRUE);

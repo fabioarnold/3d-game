@@ -98,15 +98,13 @@ function loadImageTexture(gl, url) {
 
 function jsLoadTexturePNG(dataPtr, dataLen, widthPtr, heightPtr) {
   const data = new Uint8Array(memory.buffer, dataPtr, dataLen);
-  const width16 = new Uint16Array(memory.buffer, widthPtr, 1);
-  const height16 = new Uint16Array(memory.buffer, heightPtr, 1);
   const textureId = glCreateTexture();
   const img = new Image();
   images.push(img); // track loading progress
   img.src = URL.createObjectURL(new Blob([data], { type: "image/png" }));
   img.onload = () => {
-    width16[0] = img.width;
-    height16[0] = img.height;
+    new Uint16Array(memory.buffer, widthPtr, 1)[0] = img.width;
+    new Uint16Array(memory.buffer, heightPtr, 1)[0] = img.height;
     createGLTexture(gl, img, glTextures[textureId]);
   };
   return textureId;

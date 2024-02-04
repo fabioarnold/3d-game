@@ -32,6 +32,45 @@ pub fn log(
     wasm_log_flush();
 }
 
+pub const String = struct {
+    pub const Handle = i32;
+    pub const invalid:Handle = -1;
+
+    var string: []u8 = undefined; // ony one for now lol
+
+    pub fn alloc(len: usize) Handle {
+        String.string = std.heap.wasm_allocator.alloc(u8, len) catch return String.invalid;
+        return 0;
+    }
+
+    pub fn dealloc(handle: Handle) void {
+        _ = handle;
+        std.heap.wasm_allocator.free(string);
+    }
+
+    pub fn fromSlice(slice: []u8) Handle {
+        string = slice;
+        return 0;
+    }
+
+    pub fn get(handle: Handle) []u8 {
+        _ = handle;
+        return string;
+    }
+};
+export fn allocString(len: usize) String.Handle {
+    return String.alloc(len);
+}
+export fn deallocString(handle: String.Handle) void {
+    String.dealloc(handle);
+}
+export fn getStringPtr(handle: String.Handle) [*]u8 {
+    return String.get(handle).ptr;
+}
+export fn getStringLen(handle: String.Handle) usize {
+    return String.get(handle).len;
+}
+
 pub extern fn isKeyDown(key: u32) bool;
 
 pub extern fn inspectFloat(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32) void;

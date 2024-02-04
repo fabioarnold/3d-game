@@ -37,6 +37,25 @@
       fetchAndInstantiate("zig-out/bin/main.wasm", { env }).then((instance) => {
         memory = instance.exports.memory;
 
+        const getWasmString = (handle) => {
+          const ptr = instance.exports.getStringPtr(handle);
+          const len = instance.exports.getStringLen(handle);
+          return readCharStr(ptr, len);
+        };
+        const makeWasmString = (str) => {
+          const encoder = new TextEncoder();
+          const array = encoder.encode(str);
+          const handle = instance.exports.allocString(array.length);
+          if (handle === -1) return -1;
+          const ptr = instance.exports.getStringPtr(handle);
+          const len = instance.exports.getStringLen(handle);
+          const dest = new Uint8Array(memory.buffer, ptr, len);
+          for (let i = 0; i < array.length; i++) {
+            dest[i] = array[i];
+          }
+          return handle;
+        };
+
         images = [];
         let loadedImages = 0;
         instance.exports.onLoadImages();
@@ -49,6 +68,17 @@
             instance.exports.onImagesLoaded();
           }
         }
+
+        if (localStorage.getItem("snapshot")) {
+          const snapshot = localStorage.getItem("snapshot");
+          const handle = makeWasmString(snapshot);
+          instance.exports.onLoadSnapshot(handle);
+        }
+        addEventListener("beforeunload", () => {
+          const handle = instance.exports.onSaveSnapshot();
+          const snapshot = getWasmString(handle);
+          localStorage.setItem("snapshot", snapshot);
+        });
 
         function resize() {
           $canvasgl.width = window.devicePixelRatio * window.innerWidth;

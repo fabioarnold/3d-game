@@ -77,8 +77,8 @@ const glLinkShaderProgram = (vertexShaderId, fragmentShaderId) => {
 function createGLTexture(ctx, image, texture) {
   ctx.bindTexture(ctx.TEXTURE_2D, texture);
   ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA, ctx.UNSIGNED_BYTE, image);
-  ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.LINEAR);
-  ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.LINEAR_MIPMAP_LINEAR);
+  ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
+  ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST_MIPMAP_NEAREST);
   ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.REPEAT);
   ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.REPEAT);
   ctx.generateMipmap(ctx.TEXTURE_2D);
@@ -103,8 +103,8 @@ function jsLoadTexturePNG(dataPtr, dataLen, widthPtr, heightPtr) {
   images.push(img); // track loading progress
   img.src = URL.createObjectURL(new Blob([data], { type: "image/png" }));
   img.onload = () => {
-    new Uint16Array(memory.buffer, widthPtr, 1)[0] = img.width;
-    new Uint16Array(memory.buffer, heightPtr, 1)[0] = img.height;
+    if (widthPtr) new Uint16Array(memory.buffer, widthPtr, 1)[0] = img.width;
+    if (heightPtr) new Uint16Array(memory.buffer, heightPtr, 1)[0] = img.height;
     createGLTexture(gl, img, glTextures[textureId]);
   };
   return textureId;

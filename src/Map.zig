@@ -3,11 +3,14 @@ const Allocator = std.mem.Allocator;
 const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
-const Vec4 = za.Vec4;
 const Mat3 = za.Mat3;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
+const assets = @import("assets");
+const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
+const World = @import("World.zig");
+const Skybox = @import("Skybox.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -18,35 +21,22 @@ const BoundingBox = struct {
     max: Vec3,
 };
 
-pub const Material = struct {
-    texture_name: []const u8,
-    texture: textures.Texture,
-    index_start: u32,
-    index_count: u32,
-};
-
-name: []const u8,
-skybox: []const u8,
-static_solids: std.ArrayList(BoundingBox),
-models: std.ArrayList(Model),
-
-pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
-    var self = Map{
-        .name = name,
-        .skybox = undefined,
-        .static_solids = std.ArrayList(BoundingBox).init(allocator),
-        .models = std.ArrayList(Model).init(allocator),
-    };
+pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
+    // maps.findByName(name) // TODO
+    const map = assets.maps.@"1";
 
     var error_info: QuakeMap.ErrorInfo = undefined;
-    const quake_map = QuakeMap.read(allocator, data, &error_info) catch |err| {
+    const quake_map = QuakeMap.read(allocator, map, &error_info) catch |err| {
         logger.err("\"{s}.map\" {} in line {}", .{ name, err, error_info.line_number });
         return error.QuakeMapRead;
     };
 
-    self.skybox = try quake_map.worldspawn.getStringProperty("skybox");
+    const skybox_name = try quake_map.worldspawn.getStringProperty("skybox");
+    world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
 
-    try self.models.append(try Model.fromSolids(allocator, quake_map.worldspawn.solids.items));
+    const solid = try World.Solid.create(allocator);
+    solid.model = try Model.fromSolids(allocator, quake_map.worldspawn.solids.items);
+    try world.actors.append(&solid.actor);
 
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
     for (quake_map.entities.items) |entity| {
@@ -55,11 +45,34 @@ pub fn load(allocator: Allocator, name: []const u8, data: []const u8) !Map {
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             // TODO: move those up and down
             try decoration_solids.appendSlice(entity.solids.items);
+        } else if (std.mem.eql(u8, entity.classname, "Strawberry")) {
+            const strawberry = try World.Strawberry.create(allocator);
+            strawberry.actor.position = try positionFromString(try entity.getStringProperty("origin"));
+            try world.actors.append(&strawberry.actor);
+        } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
+            const static_prop = try World.StaticProp.create(allocator);
+            static_prop.actor.position = try positionFromString(try entity.getStringProperty("origin"));
+            const model_path = try entity.getStringProperty("model");
+            const i = std.mem.lastIndexOfScalar(u8, model_path, '/').? + 1;
+            const j = std.mem.lastIndexOfScalar(u8, model_path, '.').?;
+            const model_name = model_path[i..j];
+            logger.info("searching model {s}", .{model_name});
+            static_prop.model = models.findByName(model_name);
+            try world.actors.append(&static_prop.actor);
         }
     }
-    try self.models.append(try Model.fromSolids(allocator, decoration_solids.items));
+    const decoration_solid = try World.Solid.create(allocator);
+    decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
+    try world.actors.append(&decoration_solid.actor);
+}
 
-    return self;
+fn positionFromString(string: []const u8) !Vec3 {
+    var v: Vec3 = undefined;
+    var it = std.mem.tokenizeScalar(u8, string, ' ');
+    for (0..3) |i| {
+        v.data[i] = try std.fmt.parseFloat(f32, it.next() orelse return error.ExpectedFloat);
+    }
+    return v;
 }
 
 fn calculateRotatedUV(face: QuakeMap.Face, u_axis: *Vec3, v_axis: *Vec3) void {
@@ -78,15 +91,14 @@ fn closestAxis(v: Vec3) Vec3 {
     return Vec3.forward(); // 0 0 1
 }
 
-pub fn draw(self: Map, mvp_loc: gl.GLint, view_projection: Mat4) void {
-    gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
+pub const Material = struct {
+    texture_name: []const u8,
+    texture: textures.Texture,
+    index_start: u32,
+    index_count: u32,
+};
 
-    for (self.models.items) |model| {
-        model.draw();
-    }
-}
-
-const Model = struct {
+pub const Model = struct {
     materials: std.ArrayList(Material),
     vertex_buffer: gl.GLuint,
     index_buffer: gl.GLuint,

@@ -182,7 +182,7 @@ pub extern fn glGenTextures(n: GLsizei, textures: [*c]GLuint) void;
 pub extern fn glDeleteTextures(n: GLsizei, textures: [*c]const GLuint) void;
 pub extern fn glBindTexture(target: GLenum, texture: GLuint) void;
 pub extern fn glTexParameteri(target: GLenum, pname: GLenum, param: GLint) void;
-pub extern fn jsLoadTexturePNG(data_ptr: [*]const u8, data_len: usize, *u16, *u16) GLuint;
+pub extern fn jsLoadTexturePNG(data_ptr: [*]const u8, data_len: usize, ?*u16, ?*u16) GLuint;
 pub extern fn glGenerateMipmap(target: GLenum) void;
 
 pub extern fn glActiveTexture(texture: GLenum) void;

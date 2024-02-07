@@ -47,11 +47,11 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "Strawberry")) {
             const strawberry = try World.Strawberry.create(allocator);
-            strawberry.actor.position = try positionFromString(try entity.getStringProperty("origin"));
+            strawberry.actor.position = try entity.getVec3Property("origin");
             try world.actors.append(&strawberry.actor);
         } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
             const static_prop = try World.StaticProp.create(allocator);
-            static_prop.actor.position = try positionFromString(try entity.getStringProperty("origin"));
+            static_prop.actor.position = try entity.getVec3Property("origin");
             const model_path = try entity.getStringProperty("model");
             const i = std.mem.lastIndexOfScalar(u8, model_path, '/').? + 1;
             const j = std.mem.lastIndexOfScalar(u8, model_path, '.').?;
@@ -64,15 +64,6 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     const decoration_solid = try World.Solid.create(allocator);
     decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
     try world.actors.append(&decoration_solid.actor);
-}
-
-fn positionFromString(string: []const u8) !Vec3 {
-    var v: Vec3 = undefined;
-    var it = std.mem.tokenizeScalar(u8, string, ' ');
-    for (0..3) |i| {
-        v.data[i] = try std.fmt.parseFloat(f32, it.next() orelse return error.ExpectedFloat);
-    }
-    return v;
 }
 
 fn calculateRotatedUV(face: QuakeMap.Face, u_axis: *Vec3, v_axis: *Vec3) void {

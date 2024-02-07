@@ -69,6 +69,16 @@ const Entity = struct {
         }
         return error.NotFound;
     }
+
+    pub fn getVec3Property(self: Entity, key: []const u8) !Vec3 {
+        const string = try self.getStringProperty(key);
+        var it = std.mem.tokenizeScalar(u8, string, ' ');
+        var vec3: Vec3 = undefined;
+        for (0..3) |i| {
+            vec3.data[i] = try std.fmt.parseFloat(f32, it.next() orelse return error.ExpectedFloat);
+        }
+        return vec3;
+    }
 };
 
 pub const Solid = struct {

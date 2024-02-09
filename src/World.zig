@@ -113,7 +113,13 @@ pub fn loadShaders() void {
     const ptn_vert_shader = gl.glInitShader(ptn_vert_src, ptn_vert_src.len, gl.GL_VERTEX_SHADER);
     const textured_frag_src = @embedFile("shaders/textured.frag");
     const textured_frag_shader = gl.glInitShader(textured_frag_src, textured_frag_src.len, gl.GL_FRAGMENT_SHADER);
-    textured_shader = gl.glLinkShaderProgram(ptn_vert_shader, textured_frag_shader);
+    textured_shader = gl.glCreateProgram();
+    gl.glAttachShader(textured_shader, ptn_vert_shader);
+    gl.glAttachShader(textured_shader, textured_frag_shader);
+    gl.glBindAttribLocation(textured_shader, 0, "position");
+    gl.glBindAttribLocation(textured_shader, 1, "normal");
+    gl.glBindAttribLocation(textured_shader, 2, "texcoord");
+    gl.glLinkProgram(textured_shader);
     gl.glUseProgram(textured_shader);
     textured_mvp_loc = gl.glGetUniformLocation(textured_shader, "mvp");
     gl.glUniform1i(gl.glGetUniformLocation(textured_shader, "texture"), 0);
@@ -122,7 +128,12 @@ pub fn loadShaders() void {
     const pt_vert_shader = gl.glInitShader(pt_vert_src, pt_vert_src.len, gl.GL_VERTEX_SHADER);
     const textured_unlit_frag_src = @embedFile("shaders/textured_unlit.frag");
     const textured_unlit_frag_shader = gl.glInitShader(textured_unlit_frag_src, textured_unlit_frag_src.len, gl.GL_FRAGMENT_SHADER);
-    textured_unlit_shader = gl.glLinkShaderProgram(pt_vert_shader, textured_unlit_frag_shader);
+    textured_unlit_shader = gl.glCreateProgram();
+    gl.glAttachShader(textured_unlit_shader, pt_vert_shader);
+    gl.glAttachShader(textured_unlit_shader, textured_unlit_frag_shader);
+    gl.glBindAttribLocation(textured_unlit_shader, 0, "position");
+    gl.glBindAttribLocation(textured_unlit_shader, 1, "texcoord");
+    gl.glLinkProgram(textured_unlit_shader);
     gl.glUseProgram(textured_unlit_shader);
     textured_unlit_mvp_loc = gl.glGetUniformLocation(textured_unlit_shader, "mvp");
     gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "texture"), 0);

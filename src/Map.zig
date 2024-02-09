@@ -118,6 +118,8 @@ pub const Material = struct {
 };
 
 pub const Model = struct {
+    const Vertex = packed struct { x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, u: f32, v: f32 };
+
     materials: std.ArrayList(Material),
     vertex_buffer: gl.GLuint,
     index_buffer: gl.GLuint,
@@ -128,12 +130,17 @@ pub const Model = struct {
             .vertex_buffer = undefined,
             .index_buffer = undefined,
         };
-        var vertices = std.ArrayList(f32).init(allocator);
+        var vertices = std.ArrayList(Vertex).init(allocator);
+        defer vertices.deinit();
         var indices = std.ArrayList(u32).init(allocator);
+        defer indices.deinit();
+        var vertex_count: usize = 0;
+        var index_count: usize = 0;
 
         {
             var used = std.StringHashMap(void).init(allocator);
-            // find all used materials
+            defer used.deinit();
+            // find all used materials and count vertices
             for (solids) |solid| {
                 for (solid.faces.items) |face| {
                     if (!used.contains(face.texture_name)) {
@@ -143,58 +150,67 @@ pub const Model = struct {
                         material.texture = textures.findByName(face.texture_name);
                         try self.materials.append(material);
                     }
+                    vertex_count += face.vertices.items.len;
+                    index_count += 3 * (face.vertices.items.len - 2);
                 }
             }
+        }
 
-            for (self.materials.items) |*material| {
-                material.index_start = indices.items.len;
-                defer material.index_count = indices.items.len - material.index_start;
+        try vertices.ensureTotalCapacityPrecise(vertex_count);
+        try indices.ensureTotalCapacityPrecise(index_count);
 
-                const texture_size = Vec2.new(@floatFromInt(material.texture.width), @floatFromInt(material.texture.height));
+        for (self.materials.items) |*material| {
+            material.index_start = indices.items.len;
+            defer material.index_count = indices.items.len - material.index_start;
 
-                for (solids) |solid| {
-                    for (solid.faces.items) |face| {
-                        if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
+            const texture_size = Vec2.new(@floatFromInt(material.texture.width), @floatFromInt(material.texture.height));
 
-                        const vertex_index = vertices.items.len / 8;
-                        var u_axis: Vec3 = undefined;
-                        var v_axis: Vec3 = undefined;
-                        calculateRotatedUV(face, &u_axis, &v_axis);
+            for (solids) |solid| {
+                for (solid.faces.items) |face| {
+                    if (!std.mem.eql(u8, material.texture_name, face.texture_name)) continue;
 
-                        // add face vertices
-                        const n = face.plane.normal.cast(f32);
-                        for (face.vertices.items) |vertex| {
-                            const pos = vertex.cast(f32);
-                            const uv = Vec2.new(
-                                (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
-                                (v_axis.dot(pos) + face.shift_y) / texture_size.y(),
-                            );
-                            try vertices.append(pos.x());
-                            try vertices.append(pos.y());
-                            try vertices.append(pos.z());
-                            try vertices.append(uv.x());
-                            try vertices.append(uv.y());
-                            try vertices.append(n.x());
-                            try vertices.append(n.y());
-                            try vertices.append(n.z());
-                        }
+                    const vertex_index = vertices.items.len;
+                    var u_axis: Vec3 = undefined;
+                    var v_axis: Vec3 = undefined;
+                    calculateRotatedUV(face, &u_axis, &v_axis);
 
-                        // add indices
-                        for (0..face.vertices.items.len - 2) |i| {
-                            try indices.append(vertex_index + 0);
-                            try indices.append(vertex_index + i + 1);
-                            try indices.append(vertex_index + i + 2);
-                        }
+                    // add face vertices
+                    const n = face.plane.normal.cast(f32);
+                    for (face.vertices.items) |vertex| {
+                        const pos = vertex.cast(f32);
+                        const uv = Vec2.new(
+                            (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
+                            (v_axis.dot(pos) + face.shift_y) / texture_size.y(),
+                        );
+                        vertices.appendAssumeCapacity(.{
+                            .x = pos.x(),
+                            .y = pos.y(),
+                            .z = pos.z(),
+                            .nx = n.x(),
+                            .ny = n.y(),
+                            .nz = n.z(),
+                            .u = uv.x(),
+                            .v = uv.y(),
+                        });
+                    }
+
+                    // add indices
+                    for (0..face.vertices.items.len - 2) |i| {
+                        indices.appendAssumeCapacity(vertex_index + 0);
+                        indices.appendAssumeCapacity(vertex_index + i + 1);
+                        indices.appendAssumeCapacity(vertex_index + i + 2);
                     }
                 }
             }
-
-            logger.info("generateModel: {} vertices {} indices", .{ vertices.items.len / 8, indices.items.len });
         }
+
+        std.debug.assert(vertices.items.len == vertex_count);
+        std.debug.assert(indices.items.len == index_count);
+        logger.info("generateModel: {} vertices {} indices", .{ vertices.items.len, indices.items.len });
 
         gl.glGenBuffers(1, &self.vertex_buffer);
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
-        gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(vertices.items.len * @sizeOf(f32)), @ptrCast(vertices.items.ptr), gl.GL_STATIC_DRAW);
+        gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(vertices.items.len * @sizeOf(Vertex)), @ptrCast(vertices.items.ptr), gl.GL_STATIC_DRAW);
         gl.glGenBuffers(1, &self.index_buffer);
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
         gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, @intCast(indices.items.len * @sizeOf(u32)), @ptrCast(indices.items.ptr), gl.GL_STATIC_DRAW);
@@ -205,11 +221,11 @@ pub const Model = struct {
     pub fn draw(self: Model) void {
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);
         gl.glEnableVertexAttribArray(0);
-        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), null);
+        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, @sizeOf(Vertex), null);
         gl.glEnableVertexAttribArray(1);
-        gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
+        gl.glVertexAttribPointer(1, 3, gl.GL_FLOAT, gl.GL_FALSE, @sizeOf(Vertex), @ptrFromInt(3 * @sizeOf(gl.GLfloat)));
         gl.glEnableVertexAttribArray(2);
-        gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, 8 * @sizeOf(gl.GLfloat), @ptrFromInt(5 * @sizeOf(gl.GLfloat)));
+        gl.glVertexAttribPointer(2, 2, gl.GL_FLOAT, gl.GL_FALSE, @sizeOf(Vertex), @ptrFromInt(6 * @sizeOf(gl.GLfloat)));
 
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.index_buffer);
         for (self.materials.items) |material| {

@@ -1,8 +1,8 @@
 precision mediump float;
 uniform sampler2D texture;
 
-varying vec2 v_texcoord;
 varying vec3 v_normal;
+varying vec2 v_texcoord;
 
 void main() {
 	float l = 0.75 + 0.25 * dot(normalize(v_normal), normalize(vec3(0.5, -0.2, 1.0)));

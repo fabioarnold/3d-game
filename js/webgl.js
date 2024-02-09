@@ -62,6 +62,19 @@ const glInitShader = (sourcePtr, sourceLen, type) => {
   glShaders.push(shader);
   return glShaders.length - 1;
 };
+const glCreateProgram = () => {
+  const program = gl.createProgram();
+  glPrograms.push(program);
+  return glPrograms.length - 1;
+};
+const glAttachShader = (programId, shaderId) => gl.attachShader(glPrograms[programId], glShaders[shaderId]);
+const glLinkProgram = (programId) => {
+  const program = glPrograms[programId];
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw "Error linking program:" + gl.getProgramInfoLog(program);
+  }
+};
 const glLinkShaderProgram = (vertexShaderId, fragmentShaderId) => {
   const program = gl.createProgram();
   gl.attachShader(program, glShaders[vertexShaderId]);
@@ -119,6 +132,8 @@ const glDepthMask = (x) => gl.depthMask(x);
 const glDepthFunc = (x) => gl.depthFunc(x);
 const glBlendFunc = (x, y) => gl.blendFunc(x, y);
 const glClear = (x) => gl.clear(x);
+const jsBindAttribLocation = (programId, index, namePtr, nameLen) =>
+  gl.bindAttribLocation(glPrograms[programId], index, readCharStr(namePtr, nameLen));
 const glGetAttribLocation = (programId, namePtr, nameLen) =>
   gl.getAttribLocation(glPrograms[programId], readCharStr(namePtr, nameLen));
 const glGetUniformLocation = (programId, namePtr, nameLen) => {
@@ -235,9 +250,12 @@ const glGetError = () => gl.getError();
 var webgl = {
   glInitShader,
   glLinkShaderProgram,
+  glCreateProgram,
   glDeleteProgram,
+  glAttachShader,
   glDetachShader,
   glDeleteShader,
+  glLinkProgram,
   glViewport,
   glClearColor,
   glEnable,
@@ -247,6 +265,7 @@ var webgl = {
   glDepthFunc,
   glBlendFunc,
   glClear,
+  jsBindAttribLocation,
   glGetAttribLocation,
   jsGetUniformLocation,
   glUniform4f,

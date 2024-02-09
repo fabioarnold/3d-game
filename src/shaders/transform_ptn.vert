@@ -1,10 +1,10 @@
 uniform mat4 mvp;
 attribute vec3 position;
-attribute vec2 texcoord;
 attribute vec3 normal;
+attribute vec2 texcoord;
 
-varying vec2 v_texcoord;
 varying vec3 v_normal;
+varying vec2 v_texcoord;
 
 void main() {
 	v_normal = normal;

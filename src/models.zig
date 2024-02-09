@@ -94,8 +94,10 @@ pub const Model = struct {
                 for (primitive.attributes.items) |attribute| {
                     switch (attribute) {
                         .position => |accessor_index| self.bindVertexAttrib(accessor_index, 0),
-                        .normal => |accessor_index| self.bindVertexAttrib(accessor_index, 2),
-                        .texcoord => |accessor_index| self.bindVertexAttrib(accessor_index, 1),
+                        .normal => |accessor_index| self.bindVertexAttrib(accessor_index, 1),
+                        .texcoord => |accessor_index| self.bindVertexAttrib(accessor_index, 2),
+                        .joints => |accessor_index| self.bindVertexAttrib(accessor_index, 3),
+                        .weights => |accessor_index| self.bindVertexAttrib(accessor_index, 4),
                         else => {},
                     }
                 }

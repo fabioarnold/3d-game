@@ -97,7 +97,7 @@
           if (document.pointerLockElement === $canvasgl) {
             instance.exports.onMouseMove(e.movementX, e.movementY);
           }
-        });
+        }, {passive: true, capture: true});
         $canvasgl.addEventListener("mouseup", () => {
           if (document.pointerLockElement === $canvasgl) {
             document.exitPointerLock();

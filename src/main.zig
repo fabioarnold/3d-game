@@ -86,10 +86,13 @@ export fn onKeyUp(key: c_uint) void {
     _ = key;
 }
 export fn onMouseMove(x: c_int, y: c_int) void {
-    const dx: f32 = @floatFromInt(y);
-    const dy: f32 = @floatFromInt(x);
-    state.camera.rotateView(dx * -0.25, dy * 0.25);
+    const dx: f32 = @floatFromInt(x);
+    const dy: f32 = @floatFromInt(y);
+    mrx += -0.25 * dy;
+    mry += 0.25 * dx;
 }
+var mrx: f32 = 0;
+var mry: f32 = 0;
 
 export fn onAnimationFrame() void {
     if (!loaded) return;
@@ -97,6 +100,9 @@ export fn onAnimationFrame() void {
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
+    state.camera.rotateView(mrx, mry);
+    mrx = 0;
+    mry = 0;
     state.camera.handleKeys();
     state.camera.inspect();
 

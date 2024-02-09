@@ -79,7 +79,11 @@ pub const Model = struct {
 
         for (self.gltf.data.nodes.items) |node| {
             const mesh_index = node.mesh orelse continue;
-            const model = Mat4{ .data = zgltf.getGlobalTransform(&self.gltf.data, node) };
+            var model = Mat4{ .data = zgltf.getGlobalTransform(&self.gltf.data, node) };
+            if (node.skin) |_| {
+                // TODO
+                model = Mat4.identity();
+            }
             const mvp = view_projection.mul(z_up).mul(model);
             gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
             const mesh = self.gltf.data.meshes.items[mesh_index];

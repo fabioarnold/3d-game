@@ -74,7 +74,7 @@ fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
         var checkpoint = try World.Actor.create(World.Checkpoint, allocator);
         checkpoint.actor.position = try entity.getVec3Property("origin");
         checkpoint.model_on.model = models.findByName("flag_on");
-        checkpoint.current = false;
+        checkpoint.current = true;
         checkpoint.model_on.play("Idle");
         return &checkpoint.actor;
     } else {

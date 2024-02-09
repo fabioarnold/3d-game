@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub extern fn performanceNow() f64;
+
 extern fn wasm_log_write(ptr: [*]const u8, len: usize) void;
 
 extern fn wasm_log_flush() void;

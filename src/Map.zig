@@ -38,13 +38,19 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     solid.model = try Model.fromSolids(allocator, quake_map.worldspawn.solids.items);
     try world.actors.append(&solid.actor);
 
+    var prng = std.rand.DefaultPrng.init(0);
+    const r = prng.random();
+
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
     for (quake_map.entities.items) |entity| {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
-            // TODO: move those up and down
-            try decoration_solids.appendSlice(entity.solids.items);
+            const floating_decoration = try World.Actor.create(World.FloatingDecoration, allocator);
+            floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
+            floating_decoration.rate = 0.25 * (1.0 + 2.0 * r.float(f32));
+            floating_decoration.offset = r.float(f32) * std.math.tau;
+            try world.actors.append(&floating_decoration.actor);
         } else {
             if (try createActor(allocator, entity)) |actor| {
                 if (entity.hasProperty("angle")) {

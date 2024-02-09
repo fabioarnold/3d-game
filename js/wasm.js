@@ -4,6 +4,8 @@ const readCharStr = (ptr, len) => {
     return decoder.decode(array)
 }
 
+const performanceNow = () => performance.now();
+
 let log_string = '';
 
 const wasm_log_write = (ptr, len) => {
@@ -16,6 +18,7 @@ const wasm_log_flush = () => {
 }
 
 var wasm = {
+    performanceNow,
     wasm_log_write,
     wasm_log_flush,
 };

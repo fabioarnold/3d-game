@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
 const SkinnedModel = @import("SkinnedModel.zig");
@@ -43,6 +44,21 @@ pub const Solid = struct {
         const mvp = vp.mul(Mat4.fromTranslate(actor.position));
         gl.glUniformMatrix4fv(textured_mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
         solid.model.draw();
+    }
+};
+
+pub const FloatingDecoration = struct {
+    actor: Actor,
+    model: Map.Model,
+    rate: f32,
+    offset: f32,
+
+    fn draw(actor: *Actor, vp: Mat4) void {
+        const self = @fieldParentPtr(FloatingDecoration, "actor", actor);
+        const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
+        const mvp = vp.mul(Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0)));
+        gl.glUniformMatrix4fv(textured_mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+        self.model.draw();
     }
 };
 

@@ -5,27 +5,38 @@ const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
+const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
 const Map = @import("Map.zig");
+const logger = std.log.scoped(.world);
 
 const World = @This();
 
 pub const Actor = struct {
-    position: Vec3 = Vec3.zero,
+    position: Vec3 = Vec3.zero(),
+    angle: f32 = 0,
     draw: *const fn (*Actor, Mat4) void,
+
+    pub fn create(comptime T: type, allocator: Allocator) !*T {
+        var t = try allocator.create(T);
+        t.actor = .{
+            .draw = &T.draw,
+        };
+        return t;
+    }
+
+    fn getTransform(self: Actor) Mat4 {
+        const r = Mat4.fromRotation(self.angle, Vec3.new(0, 0, 1));
+        const t = Mat4.fromTranslate(self.position);
+        return t.mul(r);
+    }
 };
 
 pub const Solid = struct {
     actor: Actor,
     collidable: bool = true,
     model: Map.Model,
-
-    pub fn create(allocator: Allocator) !*Solid {
-        var solid = try allocator.create(Solid);
-        solid.actor.draw = &Solid.draw;
-        return solid;
-    }
 
     fn draw(actor: *Actor, vp: Mat4) void {
         const solid = @fieldParentPtr(Solid, "actor", actor);
@@ -39,15 +50,9 @@ pub const Strawberry = struct {
     actor: Actor,
     const model = models.findByName("strawberry");
 
-    pub fn create(allocator: Allocator) !*Strawberry {
-        var strawberry = try allocator.create(Strawberry);
-        strawberry.actor.draw = &Strawberry.draw;
-        return strawberry;
-    }
-
     fn draw(actor: *Actor, vp: Mat4) void {
         const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
-        model.draw(textured_mvp_loc, vp.mul(Mat4.fromTranslate(actor.position)).mul(scale));
+        model.draw(textured_mvp_loc, vp.mul(actor.getTransform()).mul(scale));
     }
 };
 
@@ -55,15 +60,26 @@ pub const StaticProp = struct {
     actor: Actor,
     model: *models.Model,
 
-    pub fn create(allocator: Allocator) !*StaticProp {
-        var static_prop = try allocator.create(StaticProp);
-        static_prop.actor.draw = &StaticProp.draw;
-        return static_prop;
-    }
-
     fn draw(actor: *Actor, vp: Mat4) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);
-        static_prop.model.draw(textured_mvp_loc, vp.mul(Mat4.fromTranslate(actor.position)));
+        static_prop.model.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+    }
+};
+
+pub const Checkpoint = struct {
+    const model_off = models.findByName("flag_off");
+
+    actor: Actor,
+    model_on: SkinnedModel,
+    current: bool,
+
+    fn draw(actor: *Actor, vp: Mat4) void {
+        const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
+        if (checkpoint.current) {
+            checkpoint.model_on.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+        } else {
+            model_off.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+        }
     }
 };
 

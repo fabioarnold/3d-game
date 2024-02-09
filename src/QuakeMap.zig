@@ -46,7 +46,7 @@ const Property = struct {
     value: []const u8,
 };
 
-const Entity = struct {
+pub const Entity = struct {
     classname: []const u8,
     spawnflags: u32,
     properties: std.ArrayList(Property),
@@ -61,13 +61,27 @@ const Entity = struct {
         };
     }
 
-    pub fn getStringProperty(self: Entity, key: []const u8) ![]const u8 {
-        for (self.properties.items) |property| {
+    fn indexOfProperty(self: Entity, key: []const u8) ?usize {
+        for (self.properties.items, 0..) |property, i| {
             if (std.mem.eql(u8, property.key, key)) {
-                return property.value;
+                return i;
             }
         }
-        return error.NotFound;
+        return null;
+    }
+
+    pub fn hasProperty(self: Entity, key:[]const u8) bool {
+        return self.indexOfProperty(key) != null;
+    }
+
+    pub fn getStringProperty(self: Entity, key: []const u8) ![]const u8 {
+        const i = self.indexOfProperty(key) orelse return error.NotFound;
+        return self.properties.items[i].value;
+    }
+
+    pub fn getFloatProperty(self: Entity, key: []const u8) !f32 {
+        const string = try self.getStringProperty(key);
+        return try std.fmt.parseFloat(f32, string);
     }
 
     pub fn getVec3Property(self: Entity, key: []const u8) !Vec3 {

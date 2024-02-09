@@ -34,7 +34,7 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     const skybox_name = try quake_map.worldspawn.getStringProperty("skybox");
     world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
 
-    const solid = try World.Solid.create(allocator);
+    const solid = try World.Actor.create(World.Solid, allocator);
     solid.model = try Model.fromSolids(allocator, quake_map.worldspawn.solids.items);
     try world.actors.append(&solid.actor);
 
@@ -45,25 +45,47 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             // TODO: move those up and down
             try decoration_solids.appendSlice(entity.solids.items);
-        } else if (std.mem.eql(u8, entity.classname, "Strawberry")) {
-            const strawberry = try World.Strawberry.create(allocator);
-            strawberry.actor.position = try entity.getVec3Property("origin");
-            try world.actors.append(&strawberry.actor);
-        } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
-            const static_prop = try World.StaticProp.create(allocator);
-            static_prop.actor.position = try entity.getVec3Property("origin");
-            const model_path = try entity.getStringProperty("model");
-            const i = std.mem.lastIndexOfScalar(u8, model_path, '/').? + 1;
-            const j = std.mem.lastIndexOfScalar(u8, model_path, '.').?;
-            const model_name = model_path[i..j];
-            logger.info("searching model {s}", .{model_name});
-            static_prop.model = models.findByName(model_name);
-            try world.actors.append(&static_prop.actor);
+        } else {
+            if (try createActor(allocator, entity)) |actor| {
+                if (entity.hasProperty("angle")) {
+                    actor.angle = try entity.getFloatProperty("angle");
+                }
+                try world.actors.append(actor);
+            }
         }
     }
-    const decoration_solid = try World.Solid.create(allocator);
+    const decoration_solid = try World.Actor.create(World.Solid, allocator);
     decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
     try world.actors.append(&decoration_solid.actor);
+}
+
+fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
+    if (std.mem.eql(u8, entity.classname, "Strawberry")) {
+        const strawberry = try World.Actor.create(World.Strawberry, allocator);
+        strawberry.actor.position = try entity.getVec3Property("origin");
+        return &strawberry.actor;
+    } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
+        const static_prop = try World.Actor.create(World.StaticProp, allocator);
+        static_prop.actor.position = try entity.getVec3Property("origin");
+        const model_path = try entity.getStringProperty("model");
+        static_prop.model = models.findByName(modelNameFromPath(model_path));
+        return &static_prop.actor;
+    } else if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
+        var checkpoint = try World.Actor.create(World.Checkpoint, allocator);
+        checkpoint.actor.position = try entity.getVec3Property("origin");
+        checkpoint.model_on.model = models.findByName("flag_on");
+        checkpoint.current = false;
+        checkpoint.model_on.play("Idle");
+        return &checkpoint.actor;
+    } else {
+        return null;
+    }
+}
+
+fn modelNameFromPath(model_path: []const u8) []const u8 {
+    const i = std.mem.lastIndexOfScalar(u8, model_path, '/').? + 1;
+    const j = std.mem.lastIndexOfScalar(u8, model_path, '.').?;
+    return model_path[i..j];
 }
 
 fn calculateRotatedUV(face: QuakeMap.Face, u_axis: *Vec3, v_axis: *Vec3) void {

@@ -4,6 +4,7 @@ const Texture = @import("textures.zig").Texture;
 const zgltf = @import("zgltf");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
+const Quat = za.Quat;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
 const logger = std.log.scoped(.models);
@@ -60,13 +61,28 @@ pub const Model = struct {
         gl.glVertexAttribPointer(attrib_index, size, typ, normalized, stride, pointer);
     }
 
+    fn getTransform(self: Model, node: zgltf.Node) Mat4 {
+        const scale = Vec3.new(node.scale[0], node.scale[1], node.scale[2]);
+        const rotation = Quat.new(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
+        const translation = Vec3.new(node.translation[0], node.translation[1], node.translation[2]);
+        const node_transform = Mat4.recompose(translation, rotation, scale);
+        if (node.parent) |parent_index| {
+            const parent_node = self.gltf.data.nodes.items[parent_index];
+            const parent_transform = self.getTransform(parent_node);
+            return parent_transform.mul(node_transform);
+        }
+        return node_transform;
+    }
+
     pub fn draw(self: Model, mvp_loc: gl.GLint, view_projection: Mat4) void {
         const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
 
-        const mvp = view_projection.mul(z_up);
-        gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
-
-        for (self.gltf.data.meshes.items) |mesh| {
+        for (self.gltf.data.nodes.items) |node| {
+            const mesh_index = node.mesh orelse continue;
+            const model = Mat4{ .data = zgltf.getGlobalTransform(&self.gltf.data, node) };
+            const mvp = view_projection.mul(z_up).mul(model);
+            gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+            const mesh = self.gltf.data.meshes.items[mesh_index];
             for (mesh.primitives.items) |primitive| {
                 const material = self.gltf.data.materials.items[primitive.material.?];
                 const texture = self.textures[material.metallic_roughness.base_color_texture.?.index];
@@ -98,8 +114,8 @@ pub fn load(allocator: std.mem.Allocator) !void {
         const aligned_data = try allocator.dupe(u8, data);
         defer allocator.free(aligned_data);
         try models[i].load(allocator, aligned_data);
-        logger.info("loaded {s}:", .{decl.name});
-        debugPrint(&models[i].gltf);
+        // logger.info("loaded {s}:", .{decl.name});
+        // debugPrint(&models[i].gltf);
     }
 }
 

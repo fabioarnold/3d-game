@@ -61,20 +61,13 @@ pub const Model = struct {
         gl.glVertexAttribPointer(attrib_index, size, typ, normalized, stride, pointer);
     }
 
-    fn getTransform(self: Model, node: zgltf.Node) Mat4 {
-        const scale = Vec3.new(node.scale[0], node.scale[1], node.scale[2]);
-        const rotation = Quat.new(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
-        const translation = Vec3.new(node.translation[0], node.translation[1], node.translation[2]);
-        const node_transform = Mat4.recompose(translation, rotation, scale);
-        if (node.parent) |parent_index| {
-            const parent_node = self.gltf.data.nodes.items[parent_index];
-            const parent_transform = self.getTransform(parent_node);
-            return parent_transform.mul(node_transform);
-        }
-        return node_transform;
-    }
+    pub const ShaderInfo = struct {
+        mvp_loc: gl.GLint,
+        joints_loc: gl.GLint,
+        blend_skin_loc: gl.GLint,
+    };
 
-    pub fn draw(self: Model, mvp_loc: gl.GLint, view_projection: Mat4) void {
+    pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
         const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
 
         for (self.gltf.data.nodes.items) |node| {
@@ -85,7 +78,7 @@ pub const Model = struct {
                 model = Mat4.identity();
             }
             const mvp = view_projection.mul(z_up).mul(model);
-            gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+            gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
             const mesh = self.gltf.data.meshes.items[mesh_index];
             for (mesh.primitives.items) |primitive| {
                 const material = self.gltf.data.materials.items[primitive.material.?];
@@ -101,6 +94,16 @@ pub const Model = struct {
                         else => {},
                     }
                 }
+                defer for (primitive.attributes.items) |attribute| {
+                    switch (attribute) {
+                        .position => gl.glDisableVertexAttribArray(0),
+                        .normal => gl.glDisableVertexAttribArray(1),
+                        .texcoord => gl.glDisableVertexAttribArray(2),
+                        .joints => gl.glDisableVertexAttribArray(3),
+                        .weights => gl.glDisableVertexAttribArray(4),
+                        else => {},
+                    }
+                };
                 const accessor_index = primitive.indices.?;
                 const accessor = self.gltf.data.accessors.items[accessor_index];
                 const buffer_view = self.gltf.data.buffer_views.items[accessor.buffer_view.?];

@@ -206,7 +206,7 @@ pub const Model = struct {
 
         std.debug.assert(vertices.items.len == vertex_count);
         std.debug.assert(indices.items.len == index_count);
-        logger.info("generateModel: {} vertices {} indices", .{ vertices.items.len, indices.items.len });
+        // logger.info("generateModel: {} vertices {} indices", .{ vertices.items.len, indices.items.len });
 
         gl.glGenBuffers(1, &self.vertex_buffer);
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vertex_buffer);

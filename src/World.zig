@@ -6,6 +6,7 @@ const Mat4 = za.Mat4;
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
+const ShaderInfo = models.Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
@@ -17,7 +18,7 @@ const World = @This();
 pub const Actor = struct {
     position: Vec3 = Vec3.zero(),
     angle: f32 = 0,
-    draw: *const fn (*Actor, Mat4) void,
+    draw: *const fn (*Actor, ShaderInfo, Mat4) void,
 
     pub fn create(comptime T: type, allocator: Allocator) !*T {
         var t = try allocator.create(T);
@@ -39,10 +40,10 @@ pub const Solid = struct {
     collidable: bool = true,
     model: Map.Model,
 
-    fn draw(actor: *Actor, vp: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const solid = @fieldParentPtr(Solid, "actor", actor);
-        const mvp = vp.mul(Mat4.fromTranslate(actor.position));
-        gl.glUniformMatrix4fv(textured_mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+        const mvp = view_projection.mul(Mat4.fromTranslate(actor.position));
+        gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
         solid.model.draw();
     }
 };
@@ -53,11 +54,12 @@ pub const FloatingDecoration = struct {
     rate: f32,
     offset: f32,
 
-    fn draw(actor: *Actor, vp: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const self = @fieldParentPtr(FloatingDecoration, "actor", actor);
         const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
-        const mvp = vp.mul(Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0)));
-        gl.glUniformMatrix4fv(textured_mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+        const translation = Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0));
+        const mvp = view_projection.mul(translation);
+        gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
         self.model.draw();
     }
 };
@@ -66,9 +68,10 @@ pub const Strawberry = struct {
     actor: Actor,
     const model = models.findByName("strawberry");
 
-    fn draw(actor: *Actor, vp: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
-        model.draw(textured_mvp_loc, vp.mul(actor.getTransform()).mul(scale));
+        const mvp = view_projection.mul(actor.getTransform()).mul(scale);
+        model.draw(si, mvp);
     }
 };
 
@@ -76,9 +79,9 @@ pub const StaticProp = struct {
     actor: Actor,
     model: *models.Model,
 
-    fn draw(actor: *Actor, vp: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);
-        static_prop.model.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+        static_prop.model.draw(si, view_projection.mul(actor.getTransform()));
     }
 };
 
@@ -89,12 +92,13 @@ pub const Checkpoint = struct {
     model_on: SkinnedModel,
     current: bool,
 
-    fn draw(actor: *Actor, vp: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
+        const mvp = view_projection.mul(actor.getTransform());
         if (checkpoint.current) {
-            checkpoint.model_on.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+            checkpoint.model_on.draw(si, mvp);
         } else {
-            model_off.draw(textured_mvp_loc, vp.mul(actor.getTransform()));
+            model_off.draw(si, mvp);
         }
     }
 };
@@ -102,41 +106,48 @@ pub const Checkpoint = struct {
 actors: std.ArrayList(*Actor),
 skybox: Skybox,
 
-// TODO: move to Material struct
-var textured_shader: gl.GLuint = undefined;
-var textured_mvp_loc: gl.GLint = undefined;
 var textured_unlit_shader: gl.GLuint = undefined;
 var textured_unlit_mvp_loc: gl.GLint = undefined;
 
-pub fn loadShaders() void {
-    const ptn_vert_src = @embedFile("shaders/transform_ptn.vert");
-    const ptn_vert_shader = gl.glInitShader(ptn_vert_src, ptn_vert_src.len, gl.GL_VERTEX_SHADER);
-    const textured_frag_src = @embedFile("shaders/textured.frag");
-    const textured_frag_shader = gl.glInitShader(textured_frag_src, textured_frag_src.len, gl.GL_FRAGMENT_SHADER);
-    textured_shader = gl.glCreateProgram();
-    gl.glAttachShader(textured_shader, ptn_vert_shader);
-    gl.glAttachShader(textured_shader, textured_frag_shader);
-    gl.glBindAttribLocation(textured_shader, 0, "position");
-    gl.glBindAttribLocation(textured_shader, 1, "normal");
-    gl.glBindAttribLocation(textured_shader, 2, "texcoord");
-    gl.glLinkProgram(textured_shader);
-    gl.glUseProgram(textured_shader);
-    textured_mvp_loc = gl.glGetUniformLocation(textured_shader, "mvp");
-    gl.glUniform1i(gl.glGetUniformLocation(textured_shader, "texture"), 0);
+var textured_skinned_shader: gl.GLuint = undefined;
+var textured_skinned_mvp_loc: gl.GLint = undefined;
+var textured_skinned_joints_loc: gl.GLint = undefined;
+var textured_skinned_blend_skin_loc: gl.GLint = undefined;
 
-    const pt_vert_src = @embedFile("shaders/transform_pt.vert");
-    const pt_vert_shader = gl.glInitShader(pt_vert_src, pt_vert_src.len, gl.GL_VERTEX_SHADER);
-    const textured_unlit_frag_src = @embedFile("shaders/textured_unlit.frag");
-    const textured_unlit_frag_shader = gl.glInitShader(textured_unlit_frag_src, textured_unlit_frag_src.len, gl.GL_FRAGMENT_SHADER);
-    textured_unlit_shader = gl.glCreateProgram();
-    gl.glAttachShader(textured_unlit_shader, pt_vert_shader);
-    gl.glAttachShader(textured_unlit_shader, textured_unlit_frag_shader);
-    gl.glBindAttribLocation(textured_unlit_shader, 0, "position");
-    gl.glBindAttribLocation(textured_unlit_shader, 1, "texcoord");
-    gl.glLinkProgram(textured_unlit_shader);
+fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []const u8) gl.GLuint {
+    const vert_shader = gl.glInitShader(vert_src.ptr, vert_src.len, gl.GL_VERTEX_SHADER);
+    const frag_shader = gl.glInitShader(frag_src.ptr, frag_src.len, gl.GL_FRAGMENT_SHADER);
+    const program = gl.glCreateProgram();
+    gl.glAttachShader(program, vert_shader);
+    gl.glAttachShader(program, frag_shader);
+    for (attribs, 0..) |attrib, i| {
+        gl.glBindAttribLocation(program, i, @ptrCast(attrib));
+    }
+    gl.glLinkProgram(program);
+    return program;
+}
+
+pub fn loadShaders() void {
+    textured_unlit_shader = loadShader(
+        @embedFile("shaders/transform_pt.vert"),
+        @embedFile("shaders/textured_unlit.frag"),
+        &.{ "position", "texcoord" },
+    );
     gl.glUseProgram(textured_unlit_shader);
     textured_unlit_mvp_loc = gl.glGetUniformLocation(textured_unlit_shader, "mvp");
     gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "texture"), 0);
+
+    textured_skinned_shader = loadShader(
+        @embedFile("shaders/transform_skinned.vert"),
+        @embedFile("shaders/textured.frag"),
+        &.{ "position", "normal", "texcoord", "joint", "weight" },
+    );
+    gl.glUseProgram(textured_skinned_shader);
+    textured_skinned_mvp_loc = gl.glGetUniformLocation(textured_skinned_shader, "mvp");
+    textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "joints");
+    textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "blend_skin");
+    gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
+    gl.glUniform1i(gl.glGetUniformLocation(textured_skinned_shader, "texture"), 0);
 }
 
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
@@ -146,9 +157,7 @@ pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
 }
 
 pub fn draw(self: World, camera: Camera) void {
-    const projection = camera.projection();
-    const view = camera.view();
-    const view_projection = projection.mul(view);
+    const view_projection = camera.projection().mul(camera.view());
 
     {
         gl.glUseProgram(textured_unlit_shader);
@@ -161,9 +170,14 @@ pub fn draw(self: World, camera: Camera) void {
         gl.glDepthMask(gl.GL_TRUE);
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
-    gl.glUseProgram(textured_shader);
 
+    gl.glUseProgram(textured_skinned_shader);
+    const si = ShaderInfo{
+        .mvp_loc = textured_skinned_mvp_loc,
+        .joints_loc = textured_skinned_joints_loc,
+        .blend_skin_loc = textured_skinned_joints_loc,
+    };
     for (self.actors.items) |actor| {
-        actor.draw(actor, view_projection);
+        actor.draw(actor, si, view_projection);
     }
 }

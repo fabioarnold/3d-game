@@ -191,6 +191,7 @@ const glBufferData = (type, count, dataPtr, drawType) => {
 };
 const glUseProgram = (programId) => gl.useProgram(glPrograms[programId]);
 const glEnableVertexAttribArray = (x) => gl.enableVertexAttribArray(x);
+const glDisableVertexAttribArray = (x) => gl.disableVertexAttribArray(x);
 const glVertexAttribPointer = (attribLocation, size, type, normalize, stride, offset) => {
   gl.vertexAttribPointer(attribLocation, size, type, normalize, stride, offset);
 };
@@ -280,6 +281,7 @@ var webgl = {
   glBufferData,
   glUseProgram,
   glEnableVertexAttribArray,
+  glDisableVertexAttribArray,
   glVertexAttribPointer,
   glDrawArrays,
   glDrawElements,

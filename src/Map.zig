@@ -143,6 +143,7 @@ pub const Model = struct {
             // find all used materials and count vertices
             for (solids) |solid| {
                 for (solid.faces.items) |face| {
+                    if (std.mem.eql(u8, face.texture_name, "__TB_empty")) continue;
                     if (!used.contains(face.texture_name)) {
                         try used.put(face.texture_name, {});
                         var material: Material = undefined;

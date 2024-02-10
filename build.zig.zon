@@ -12,8 +12,8 @@
             .hash = "1220f4d39ae8a024b01bc4a141ccff9a410140a6f3630475b28f8ade34058eb1edb3",
         },
         .zgltf = .{
-            .url = "https://github.com/kooparse/zgltf/archive/6c44606237b4e16eb19c7d47e2d94f245c7f4667.tar.gz",
-            .hash = "1220721ed3fdbb25435bef5342ba3933ece71d062e25761b2abd3b77fcce002842e3",
+            .url = "https://github.com/kooparse/zgltf/archive/79de7be54e57235496fc3277708991fc857ef7e7.tar.gz",
+            .hash = "12205d4f90da23c4d6dc48b94b8327be3e898a23fe528babf0b223674e8977d8f473",
         },
-    }
+    },
 }

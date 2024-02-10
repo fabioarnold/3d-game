@@ -14,7 +14,7 @@ pub const Model = struct {
     buffer_objects: []gl.GLuint,
     textures: []gl.GLuint,
 
-    fn load(self: *Model, allocator: std.mem.Allocator, data: []const u8) !void {
+    fn load(self: *Model, allocator: std.mem.Allocator, data: []align(4) const u8) !void {
         self.gltf = zgltf.init(allocator);
         try self.gltf.parse(data);
         const binary = self.gltf.glb_binary.?;
@@ -76,14 +76,16 @@ pub const Model = struct {
             if (node.skin) |_| {
                 // TODO
                 model = Mat4.identity();
+                gl.glUniform1f(si.blend_skin_loc, 1);
             }
+            defer gl.glUniform1f(si.blend_skin_loc, 0);
             const mvp = view_projection.mul(z_up).mul(model);
             gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
             const mesh = self.gltf.data.meshes.items[mesh_index];
             for (mesh.primitives.items) |primitive| {
                 const material = self.gltf.data.materials.items[primitive.material.?];
                 const texture = self.textures[material.metallic_roughness.base_color_texture.?.index];
-                gl.glBindTexture(gl.GL_TEXTURE_2D, texture); // TODO: pick proper sampler
+                gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
                 for (primitive.attributes.items) |attribute| {
                     switch (attribute) {
                         .position => |accessor_index| self.bindVertexAttrib(accessor_index, 0),
@@ -120,8 +122,9 @@ pub fn load(allocator: std.mem.Allocator) !void {
     inline for (@typeInfo(assets.models).Struct.decls, 0..) |decl, i| {
         const data = @field(assets.models, decl.name);
         // FIXME @embedFile isn't aligned https://github.com/ziglang/zig/issues/4680
-        const aligned_data = try allocator.dupe(u8, data);
-        defer allocator.free(aligned_data);
+        const aligned_data = try allocator.alignedAlloc(u8, 4, data.len);
+        @memcpy(aligned_data, data);
+        // defer allocator.free(aligned_data); // TODO: we can free if we load the animation data
         try models[i].load(allocator, aligned_data);
         // logger.info("loaded {s}:", .{decl.name});
         // debugPrint(&models[i].gltf);

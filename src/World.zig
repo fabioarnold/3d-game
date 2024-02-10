@@ -131,23 +131,23 @@ pub fn loadShaders() void {
     textured_unlit_shader = loadShader(
         @embedFile("shaders/transform_pt.vert"),
         @embedFile("shaders/textured_unlit.frag"),
-        &.{ "position", "texcoord" },
+        &.{ "a_position", "a_texcoord" },
     );
     gl.glUseProgram(textured_unlit_shader);
-    textured_unlit_mvp_loc = gl.glGetUniformLocation(textured_unlit_shader, "mvp");
-    gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "texture"), 0);
+    textured_unlit_mvp_loc = gl.glGetUniformLocation(textured_unlit_shader, "u_mvp");
+    gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "u_texture"), 0);
 
     textured_skinned_shader = loadShader(
         @embedFile("shaders/transform_skinned.vert"),
         @embedFile("shaders/textured.frag"),
-        &.{ "position", "normal", "texcoord", "joint", "weight" },
+        &.{ "a_position", "a_normal", "a_texcoord", "a_joint", "a_weight" },
     );
     gl.glUseProgram(textured_skinned_shader);
-    textured_skinned_mvp_loc = gl.glGetUniformLocation(textured_skinned_shader, "mvp");
-    textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "joints");
-    textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "blend_skin");
+    textured_skinned_mvp_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_mvp");
+    textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_joints");
+    textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_blend_skin");
     gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
-    gl.glUniform1i(gl.glGetUniformLocation(textured_skinned_shader, "texture"), 0);
+    gl.glUniform1i(gl.glGetUniformLocation(textured_skinned_shader, "u_texture"), 0);
 }
 
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
@@ -175,7 +175,7 @@ pub fn draw(self: World, camera: Camera) void {
     const si = ShaderInfo{
         .mvp_loc = textured_skinned_mvp_loc,
         .joints_loc = textured_skinned_joints_loc,
-        .blend_skin_loc = textured_skinned_joints_loc,
+        .blend_skin_loc = textured_skinned_blend_skin_loc,
     };
     for (self.actors.items) |actor| {
         actor.draw(actor, si, view_projection);

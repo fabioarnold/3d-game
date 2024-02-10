@@ -192,8 +192,8 @@ const glBufferData = (type, count, dataPtr, drawType) => {
 const glUseProgram = (programId) => gl.useProgram(glPrograms[programId]);
 const glEnableVertexAttribArray = (x) => gl.enableVertexAttribArray(x);
 const glDisableVertexAttribArray = (x) => gl.disableVertexAttribArray(x);
-const glVertexAttribPointer = (attribLocation, size, type, normalize, stride, offset) => {
-  gl.vertexAttribPointer(attribLocation, size, type, normalize, stride, offset);
+const glVertexAttribPointer = (index, size, type, normalized, stride, offset) => {
+  gl.vertexAttribPointer(index, size, type, normalized, stride, offset);
 };
 const glDrawArrays = (mode, first, count) => gl.drawArrays(mode, first, count);
 const glDrawElements = (mode, count, type, offset) => gl.drawElements(mode, count, type, offset);

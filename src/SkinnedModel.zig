@@ -52,25 +52,15 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, view_projection: Mat4) voi
 
     var global_transforms: [32]Mat4 = undefined;
     for (0..nodes.len) |i| {
-        var transform = local_transforms[i].toMat4();
+        global_transforms[i] = local_transforms[i].toMat4();
         var node = &nodes[i];
         while (node.parent) |parent_index| : (node = &nodes[parent_index]) {
             const parent_transform = local_transforms[parent_index].toMat4();
-            transform = parent_transform.mul(transform);
+            global_transforms[i] = parent_transform.mul(global_transforms[i]);
         }
-        global_transforms[i] = transform;
     }
 
-    var joints: [32]Mat4 = undefined;
-    const skin = data.skins.items[0];
-    const inverse_bind_matrices = self.model.getFloatBuffer(data.accessors.items[skin.inverse_bind_matrices.?]);
-    for (skin.joints.items, 0..) |joint_index, i| {
-        const inverse_bind_matrix = access(Mat4, inverse_bind_matrices, i);
-        joints[i] = global_transforms[joint_index].mul(inverse_bind_matrix);
-    }
-    gl.glUniformMatrix4fv(si.joints_loc, @intCast(skin.joints.items.len), gl.GL_FALSE, &joints[0].data[0]);
-
-    self.model.draw(si, view_projection);
+    self.model.drawWithTransforms(si, view_projection, &global_transforms);
 }
 
 const Transform = struct {
@@ -105,11 +95,11 @@ fn sample(self: SkinnedModel, comptime T: type, sampler: zgltf.AnimationSampler,
     const data = self.model.getFloatBuffer(self.model.gltf.data.accessors.items[sampler.output]);
 
     switch (sampler.interpolation) {
-        .step => return access(T, data, stepInterpolation(samples, t)),
+        .step => return Model.access(T, data, stepInterpolation(samples, t)),
         .linear => {
             const r = linearInterpolation(samples, t);
-            const v0 = access(T, data, r.prev_i);
-            const v1 = access(T, data, r.next_i);
+            const v0 = Model.access(T, data, r.prev_i);
+            const v1 = Model.access(T, data, r.next_i);
             return switch (T) {
                 Vec3 => Vec3.lerp(v0, v1, r.alpha),
                 Quat => Quat.slerp(v0, v1, r.alpha),
@@ -118,15 +108,6 @@ fn sample(self: SkinnedModel, comptime T: type, sampler: zgltf.AnimationSampler,
         },
         .cubicspline => @panic("not implemented"),
     }
-}
-
-fn access(comptime T: type, data: []const f32, i: usize) T {
-    return switch (T) {
-        Vec3 => Vec3.new(data[3 * i + 0], data[3 * i + 1], data[3 * i + 2]),
-        Quat => Quat.new(data[4 * i + 3], data[4 * i + 0], data[4 * i + 1], data[4 * i + 2]),
-        Mat4 => Mat4.fromSlice(data[16 * i ..][0..16]),
-        else => @compileError("unexpected type"),
-    };
 }
 
 /// Returns the index of the last sample less than `t`.

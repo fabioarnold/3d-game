@@ -69,6 +69,15 @@ pub fn getFloatBuffer(self: Model, accessor: zgltf.Accessor) []const f32 {
     return @as([*]const f32, @ptrCast(buffer))[0..count];
 }
 
+pub fn access(comptime T: type, data: []const f32, i: usize) T {
+    return switch (T) {
+        Vec3 => Vec3.new(data[3 * i + 0], data[3 * i + 1], data[3 * i + 2]),
+        Quat => Quat.new(data[4 * i + 3], data[4 * i + 0], data[4 * i + 1], data[4 * i + 2]),
+        Mat4 => Mat4.fromSlice(data[16 * i ..][0..16]),
+        else => @compileError("unexpected type"),
+    };
+}
+
 fn bindVertexAttrib(self: Model, accessor_index: usize, attrib_index: usize) void {
     const accessor = self.gltf.data.accessors.items[accessor_index];
     const buffer_view = self.gltf.data.buffer_views.items[accessor.buffer_view.?];
@@ -82,23 +91,35 @@ fn bindVertexAttrib(self: Model, accessor_index: usize, attrib_index: usize) voi
     gl.glVertexAttribPointer(attrib_index, size, typ, normalized, stride, pointer);
 }
 
-pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
-    const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
+pub fn drawWithTransforms(self: Model, si: ShaderInfo, view_projection: Mat4, global_transforms: []const Mat4) void {
+    const data = &self.gltf.data;
+    const nodes = data.nodes.items;
 
-    for (self.gltf.data.nodes.items) |node| {
-        const mesh_index = node.mesh orelse continue;
-        var model = Mat4{ .data = zgltf.getGlobalTransform(&self.gltf.data, node) };
-        if (node.skin) |_| {
-            // TODO
-            model = Mat4.identity();
+    const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
+    const vp = view_projection.mul(z_up);
+
+    for (nodes, 0..) |node, node_i| {
+        const mesh = data.meshes.items[node.mesh orelse continue];
+
+        if (node.skin) |skin_index| {
+            const skin = data.skins.items[skin_index];
+            const inverse_bind_matrices = self.getFloatBuffer(data.accessors.items[skin.inverse_bind_matrices.?]);
+            var joints: [32]Mat4 = undefined;
+            for (skin.joints.items, 0..) |joint_index, i| {
+                const inverse_bind_matrix = access(Mat4, inverse_bind_matrices, i);
+                joints[i] = global_transforms[joint_index].mul(inverse_bind_matrix);
+            }
+            gl.glUniformMatrix4fv(si.joints_loc, @intCast(skin.joints.items.len), gl.GL_FALSE, &joints[0].data[0]);
             gl.glUniform1f(si.blend_skin_loc, 1);
+            gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &vp.data[0]);
+        } else {
+            const mvp = view_projection.mul(z_up).mul(global_transforms[node_i]);
+            gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
         }
         defer gl.glUniform1f(si.blend_skin_loc, 0);
-        const mvp = view_projection.mul(z_up).mul(model);
-        gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
-        const mesh = self.gltf.data.meshes.items[mesh_index];
+
         for (mesh.primitives.items) |primitive| {
-            const material = self.gltf.data.materials.items[primitive.material.?];
+            const material = data.materials.items[primitive.material.?];
             const texture = self.textures[material.metallic_roughness.base_color_texture.?.index];
             gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
             for (primitive.attributes.items) |attribute| {
@@ -122,10 +143,31 @@ pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
                 }
             };
             const accessor_index = primitive.indices.?;
-            const accessor = self.gltf.data.accessors.items[accessor_index];
-            const buffer_view = self.gltf.data.buffer_views.items[accessor.buffer_view.?];
+            const accessor = data.accessors.items[accessor_index];
+            const buffer_view = data.buffer_views.items[accessor.buffer_view.?];
             gl.glBindBuffer(@intFromEnum(buffer_view.target.?), self.buffer_objects[accessor.buffer_view.?]);
             gl.glDrawElements(@intFromEnum(primitive.mode), accessor.count, @intFromEnum(accessor.component_type), accessor.byte_offset);
         }
     }
+}
+
+pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
+    const nodes = self.gltf.data.nodes.items;
+
+    var local_transforms: [32]Mat4 = undefined;
+    for (nodes, 0..) |node, i| {
+        local_transforms[i] = .{ .data = zgltf.getLocalTransform(node) };
+    }
+
+    var global_transforms: [32]Mat4 = undefined;
+    for (0..nodes.len) |i| {
+        global_transforms[i] = local_transforms[i];
+        // in gltf parents can appear after their children, so we can't do a linear scan
+        var node = &nodes[i];
+        while (node.parent) |parent_index| : (node = &nodes[parent_index]) {
+            global_transforms[i] = local_transforms[parent_index].mul(global_transforms[i]);
+        }
+    }
+
+    self.drawWithTransforms(si, view_projection, &global_transforms);
 }

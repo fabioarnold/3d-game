@@ -13,12 +13,14 @@ const SkinnedModel = @This();
 
 model: *Model,
 animation_index: usize,
+animation_duration: f32,
 time: f32, // in seconds
 
 pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
     for (self.model.gltf.data.animations.items, 0..) |animation, i| {
         if (std.mem.eql(u8, animation.name, animation_name)) {
             self.animation_index = i;
+            self.animation_duration = self.model.computeAnimationDuration(animation);
             break;
         }
     }
@@ -34,9 +36,7 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, view_projection: Mat4) voi
     }
 
     const now: f32 = @floatCast(wasm.performanceNow() / 1000.0);
-    const t_min = 0.041667;
-    const t_max = 1.08333;
-    const t = @mod(now, (t_max - t_min)) + t_min;
+    const t = @mod(now, self.animation_duration);
 
     const animation = data.animations.items[self.animation_index];
     for (animation.channels.items) |channel| {

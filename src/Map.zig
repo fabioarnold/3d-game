@@ -70,6 +70,12 @@ fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
         const strawberry = try World.Actor.create(World.Strawberry, allocator);
         strawberry.actor.position = try entity.getVec3Property("origin");
         return &strawberry.actor;
+    } else if(std.mem.eql(u8, entity.classname, "Granny")) {
+        var granny = try World.Actor.create(World.Granny, allocator);
+        granny.actor.position = try entity.getVec3Property("origin");
+        granny.skinned_model.model = models.findByName("granny");
+        granny.skinned_model.play("Idle");
+        return &granny.actor;
     } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
         const static_prop = try World.Actor.create(World.StaticProp, allocator);
         static_prop.actor.position = try entity.getVec3Property("origin");
@@ -77,10 +83,16 @@ fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
         static_prop.model = models.findByName(modelNameFromPath(model_path));
         return &static_prop.actor;
     } else if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
+        const name = try entity.getStringProperty("name");
         var checkpoint = try World.Actor.create(World.Checkpoint, allocator);
         checkpoint.actor.position = try entity.getVec3Property("origin");
         checkpoint.model_on.model = models.findByName("flag_on");
-        checkpoint.current = true;
+        if (std.mem.eql(u8, name, "Start")) {
+            // Spawn player
+            checkpoint.current = true;
+        } else {
+            checkpoint.current = false;
+        }
         checkpoint.model_on.play("Idle");
         return &checkpoint.actor;
     } else {

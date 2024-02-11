@@ -45,6 +45,16 @@ pub fn load(self: *Model, allocator: std.mem.Allocator, data: []align(4) const u
     }
 }
 
+pub fn computeAnimationDuration(self: Model, animation: zgltf.Animation) f32 {
+    var duration: f32 = 0;
+    for (animation.samplers.items) |sampler| {
+        const input = self.gltf.data.accessors.items[sampler.input];
+        const samples = self.getFloatBuffer(input);
+        duration = @max(duration, samples[samples.len - 1]);
+    }
+    return duration;
+}
+
 fn getComponentCount(accessor: zgltf.Accessor) usize {
     return switch (accessor.type) {
         .scalar => 1,

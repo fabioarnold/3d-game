@@ -76,6 +76,18 @@ pub const Strawberry = struct {
     }
 };
 
+pub const Granny = struct {
+    actor: Actor,
+    skinned_model: SkinnedModel,
+
+    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+        const granny = @fieldParentPtr(Granny, "actor", actor);
+        const transform = Mat4.fromScale(Vec3.new(15, 15, 15)).mul(Mat4.fromTranslate(Vec3.new(0, 0, -0.5)));
+        const mvp = view_projection.mul(actor.getTransform()).mul(transform);
+        granny.skinned_model.draw(si, mvp);
+    }
+};
+
 pub const StaticProp = struct {
     actor: Actor,
     model: *Model,

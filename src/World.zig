@@ -6,7 +6,8 @@ const Mat4 = za.Mat4;
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
-const ShaderInfo = models.Model.ShaderInfo;
+const Model = @import("Model.zig");
+const ShaderInfo = Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
@@ -77,7 +78,7 @@ pub const Strawberry = struct {
 
 pub const StaticProp = struct {
     actor: Actor,
-    model: *models.Model,
+    model: *Model,
 
     fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);

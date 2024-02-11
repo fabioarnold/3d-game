@@ -19,13 +19,19 @@ const World = @This();
 pub const Actor = struct {
     position: Vec3 = Vec3.zero(),
     angle: f32 = 0,
-    draw: *const fn (*Actor, ShaderInfo, Mat4) void,
+    updateFn: *const fn (*Actor) void,
+    drawFn: *const fn (*Actor, ShaderInfo) void,
 
     pub fn create(comptime T: type, allocator: Allocator) !*T {
         var t = try allocator.create(T);
         t.actor = .{
-            .draw = &T.draw,
+            .updateFn = if (@hasDecl(T, "update")) &@field(T, "update") else &updateNoOp,
+            .drawFn = &T.draw,
         };
+        if (@hasDecl(T, "init")) {
+            const initFn = &@field(T, "init");
+            initFn(&t.actor);
+        }
         return t;
     }
 
@@ -34,6 +40,16 @@ pub const Actor = struct {
         const t = Mat4.fromTranslate(self.position);
         return t.mul(r);
     }
+
+    fn updateNoOp(_: *Actor) void {}
+
+    fn update(self: *Actor) void {
+        self.updateFn(self);
+    }
+
+    fn draw(self: *Actor, si: ShaderInfo) void {
+        self.drawFn(self, si);
+    }
 };
 
 pub const Solid = struct {
@@ -41,10 +57,10 @@ pub const Solid = struct {
     collidable: bool = true,
     model: Map.Model,
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const solid = @fieldParentPtr(Solid, "actor", actor);
-        const mvp = view_projection.mul(Mat4.fromTranslate(actor.position));
-        gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+        const model_mat = Mat4.fromTranslate(actor.position);
+        gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &model_mat.data[0]);
         solid.model.draw();
     }
 };
@@ -55,12 +71,11 @@ pub const FloatingDecoration = struct {
     rate: f32,
     offset: f32,
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const self = @fieldParentPtr(FloatingDecoration, "actor", actor);
         const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
-        const translation = Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0));
-        const mvp = view_projection.mul(translation);
-        gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+        const model_mat = Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0));
+        gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &model_mat.data[0]);
         self.model.draw();
     }
 };
@@ -69,10 +84,10 @@ pub const Strawberry = struct {
     actor: Actor,
     const model = models.findByName("strawberry");
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
-        const mvp = view_projection.mul(actor.getTransform()).mul(scale);
-        model.draw(si, mvp);
+        const model_mat = actor.getTransform().mul(scale);
+        model.draw(si, model_mat);
     }
 };
 
@@ -80,11 +95,17 @@ pub const Granny = struct {
     actor: Actor,
     skinned_model: SkinnedModel,
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn init(actor: *Actor) void {
+        const granny = @fieldParentPtr(Granny, "actor", actor);
+        granny.skinned_model.model = models.findByName("granny");
+        granny.skinned_model.play("Idle");
+    }
+
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const granny = @fieldParentPtr(Granny, "actor", actor);
         const transform = Mat4.fromScale(Vec3.new(15, 15, 15)).mul(Mat4.fromTranslate(Vec3.new(0, 0, -0.5)));
-        const mvp = view_projection.mul(actor.getTransform()).mul(transform);
-        granny.skinned_model.draw(si, mvp);
+        const model_mat = actor.getTransform().mul(transform);
+        granny.skinned_model.draw(si, model_mat);
     }
 };
 
@@ -92,9 +113,13 @@ pub const StaticProp = struct {
     actor: Actor,
     model: *Model,
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn update(actor: *Actor) void {
+        actor.angle -= 1;
+    }
+
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);
-        static_prop.model.draw(si, view_projection.mul(actor.getTransform()));
+        static_prop.model.draw(si, actor.getTransform());
     }
 };
 
@@ -105,14 +130,36 @@ pub const Checkpoint = struct {
     model_on: SkinnedModel,
     current: bool,
 
-    fn draw(actor: *Actor, si: ShaderInfo, view_projection: Mat4) void {
+    fn draw(actor: *Actor, si: ShaderInfo) void {
         const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
-        const mvp = view_projection.mul(actor.getTransform());
+        const model_mat = actor.getTransform();
         if (checkpoint.current) {
-            checkpoint.model_on.draw(si, mvp);
+            checkpoint.model_on.draw(si, model_mat);
         } else {
-            model_off.draw(si, mvp);
+            model_off.draw(si, model_mat);
         }
+    }
+};
+
+pub const Player = struct {
+    actor: Actor,
+    skinned_model: SkinnedModel,
+
+    fn init(actor: *Actor) void {
+        const player = @fieldParentPtr(Player, "actor", actor);
+        player.skinned_model.model = models.findByName("player");
+        player.skinned_model.play("Idle");
+    }
+
+    fn update(actor: *Actor) void {
+        actor.angle += 1;
+    }
+
+    fn draw(actor: *Actor, si: ShaderInfo) void {
+        const player = @fieldParentPtr(Player, "actor", actor);
+        const transform = Mat4.fromScale(Vec3.new(15, 15, 15));
+        const model_mat = actor.getTransform().mul(transform);
+        player.skinned_model.draw(si, model_mat);
     }
 };
 
@@ -123,7 +170,8 @@ var textured_unlit_shader: gl.GLuint = undefined;
 var textured_unlit_mvp_loc: gl.GLint = undefined;
 
 var textured_skinned_shader: gl.GLuint = undefined;
-var textured_skinned_mvp_loc: gl.GLint = undefined;
+var textured_skinned_viewprojection_loc: gl.GLint = undefined;
+var textured_skinned_model_loc: gl.GLint = undefined;
 var textured_skinned_joints_loc: gl.GLint = undefined;
 var textured_skinned_blend_skin_loc: gl.GLint = undefined;
 
@@ -156,7 +204,8 @@ pub fn loadShaders() void {
         &.{ "a_position", "a_normal", "a_texcoord", "a_joint", "a_weight" },
     );
     gl.glUseProgram(textured_skinned_shader);
-    textured_skinned_mvp_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_mvp");
+    textured_skinned_viewprojection_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_viewprojection");
+    textured_skinned_model_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_model");
     textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_joints");
     textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_blend_skin");
     gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
@@ -185,12 +234,14 @@ pub fn draw(self: World, camera: Camera) void {
     }
 
     gl.glUseProgram(textured_skinned_shader);
+    gl.glUniformMatrix4fv(textured_skinned_viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     const si = ShaderInfo{
-        .mvp_loc = textured_skinned_mvp_loc,
+        .model_loc = textured_skinned_model_loc,
         .joints_loc = textured_skinned_joints_loc,
         .blend_skin_loc = textured_skinned_blend_skin_loc,
     };
     for (self.actors.items) |actor| {
-        actor.draw(actor, si, view_projection);
+        actor.update();
+        actor.draw(si);
     }
 }

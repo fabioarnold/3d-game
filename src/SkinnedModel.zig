@@ -26,11 +26,11 @@ pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
     }
 }
 
-pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, view_projection: Mat4) void {
+pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
     const data = &self.model.gltf.data;
     const nodes = data.nodes.items;
 
-    var local_transforms: [32]Transform = undefined;
+    var local_transforms: [40]Transform = undefined;
     for (nodes, 0..) |node, i| {
         local_transforms[i] = Transform.fromNode(node);
     }
@@ -50,7 +50,7 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, view_projection: Mat4) voi
         }
     }
 
-    var global_transforms: [32]Mat4 = undefined;
+    var global_transforms: [40]Mat4 = undefined;
     for (0..nodes.len) |i| {
         global_transforms[i] = local_transforms[i].toMat4();
         var node = &nodes[i];
@@ -60,7 +60,7 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, view_projection: Mat4) voi
         }
     }
 
-    self.model.drawWithTransforms(si, view_projection, &global_transforms);
+    self.model.drawWithTransforms(si, model_mat, &global_transforms);
 }
 
 const Transform = struct {

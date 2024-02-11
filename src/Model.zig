@@ -10,7 +10,7 @@ const gl = @import("web/webgl.zig");
 const Model = @This();
 
 pub const ShaderInfo = struct {
-    mvp_loc: gl.GLint,
+    model_loc: gl.GLint,
     joints_loc: gl.GLint,
     blend_skin_loc: gl.GLint,
 };
@@ -101,12 +101,11 @@ fn bindVertexAttrib(self: Model, accessor_index: usize, attrib_index: usize) voi
     gl.glVertexAttribPointer(attrib_index, size, typ, normalized, stride, pointer);
 }
 
-pub fn drawWithTransforms(self: Model, si: ShaderInfo, view_projection: Mat4, global_transforms: []const Mat4) void {
+pub fn drawWithTransforms(self: Model, si: ShaderInfo, model_mat: Mat4, global_transforms: []const Mat4) void {
     const data = &self.gltf.data;
     const nodes = data.nodes.items;
 
     const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
-    const vp = view_projection.mul(z_up);
 
     for (nodes, 0..) |node, node_i| {
         const mesh = data.meshes.items[node.mesh orelse continue];
@@ -121,10 +120,11 @@ pub fn drawWithTransforms(self: Model, si: ShaderInfo, view_projection: Mat4, gl
             }
             gl.glUniformMatrix4fv(si.joints_loc, @intCast(skin.joints.items.len), gl.GL_FALSE, &joints[0].data[0]);
             gl.glUniform1f(si.blend_skin_loc, 1);
-            gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &vp.data[0]);
+            const model = model_mat.mul(z_up);
+            gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &model.data[0]);
         } else {
-            const mvp = view_projection.mul(z_up).mul(global_transforms[node_i]);
-            gl.glUniformMatrix4fv(si.mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
+            const model = model_mat.mul(z_up).mul(global_transforms[node_i]);
+            gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &model.data[0]);
         }
         defer gl.glUniform1f(si.blend_skin_loc, 0);
 
@@ -161,7 +161,7 @@ pub fn drawWithTransforms(self: Model, si: ShaderInfo, view_projection: Mat4, gl
     }
 }
 
-pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
+pub fn draw(self: Model, si: ShaderInfo, model_mat: Mat4) void {
     const nodes = self.gltf.data.nodes.items;
 
     var local_transforms: [32]Mat4 = undefined;
@@ -179,5 +179,5 @@ pub fn draw(self: Model, si: ShaderInfo, view_projection: Mat4) void {
         }
     }
 
-    self.drawWithTransforms(si, view_projection, &global_transforms);
+    self.drawWithTransforms(si, model_mat, &global_transforms);
 }

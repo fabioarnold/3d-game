@@ -113,10 +113,6 @@ pub const StaticProp = struct {
     actor: Actor,
     model: *Model,
 
-    fn update(actor: *Actor) void {
-        actor.angle -= 1;
-    }
-
     fn draw(actor: *Actor, si: ShaderInfo) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);
         static_prop.model.draw(si, actor.getTransform());

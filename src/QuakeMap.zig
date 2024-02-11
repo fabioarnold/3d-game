@@ -70,7 +70,7 @@ pub const Entity = struct {
         return null;
     }
 
-    pub fn hasProperty(self: Entity, key:[]const u8) bool {
+    pub fn hasProperty(self: Entity, key: []const u8) bool {
         return self.indexOfProperty(key) != null;
     }
 
@@ -81,7 +81,7 @@ pub const Entity = struct {
 
     pub fn getFloatProperty(self: Entity, key: []const u8) !f32 {
         const string = try self.getStringProperty(key);
-        return try std.fmt.parseFloat(f32, string);
+        return try parseFloat(string);
     }
 
     pub fn getVec3Property(self: Entity, key: []const u8) !Vec3 {
@@ -89,7 +89,7 @@ pub const Entity = struct {
         var it = std.mem.tokenizeScalar(u8, string, ' ');
         var vec3: Vec3 = undefined;
         for (0..3) |i| {
-            vec3.data[i] = try std.fmt.parseFloat(f32, it.next() orelse return error.ExpectedFloat);
+            vec3.data[i] = try parseFloat(it.next() orelse return error.ExpectedFloat);
         }
         return vec3;
     }
@@ -103,13 +103,77 @@ pub const Solid = struct {
     }
 
     fn computeVertices(self: *Solid) !void {
+        const allocator = self.faces.allocator;
+        var buffer: [64]Vec3d = undefined;
+        var vertices = std.ArrayListUnmanaged(Vec3d).initBuffer(buffer[0..32]);
+        var clipped = std.ArrayListUnmanaged(Vec3d).initBuffer(buffer[32..64]);
         for (self.faces.items, 0..) |*face, i| {
-            try face.createVerticesFromPlaneWithRadius(1000000.0);
+            const quad = face.plane.makeQuadWithRadius(1000000.0);
+            vertices.clearRetainingCapacity();
+            vertices.appendSliceAssumeCapacity(&quad);
             // clip with other planes
             for (self.faces.items, 0..) |clip_face, j| {
                 if (j == i) continue;
-                try face.clip(clip_face.plane);
-                if (face.vertices.items.len < 3) return error.DegenerateFace;
+                clipped.clearRetainingCapacity();
+                try clip(vertices, clip_face.plane, &clipped);
+                if (clipped.items.len < 3) return error.DegenerateFace;
+                std.mem.swap(std.ArrayListUnmanaged(Vec3d), &vertices, &clipped);
+            }
+            face.vertices = try allocator.dupe(Vec3d, vertices.items);
+        }
+    }
+
+    fn clip(vertices: std.ArrayListUnmanaged(Vec3d), clip_plane: Plane, clipped: *std.ArrayListUnmanaged(Vec3d)) !void {
+        const epsilon = 0.0001;
+
+        var buffer: [32]f64 = undefined;
+        var distances = std.ArrayListUnmanaged(f64).initBuffer(&buffer);
+        var cb: usize = 0;
+        var cf: usize = 0;
+        for (vertices.items) |vertex| {
+            var distance = clip_plane.normal.dot(vertex) + clip_plane.d;
+            if (distance < -epsilon) {
+                cb += 1;
+            } else if (distance > epsilon) {
+                cf += 1;
+            } else {
+                distance = 0;
+            }
+            distances.appendAssumeCapacity(distance);
+        }
+
+        if (cb == 0 and cf == 0) {
+            // co-planar
+            return;
+        } else if (cb == 0) {
+            // all vertices in front
+            return;
+        } else if (cf == 0) {
+            // all vertices in back;
+            // keep
+            clipped.appendSliceAssumeCapacity(vertices.items);
+            return;
+        }
+
+        for (vertices.items, 0..) |s, i| {
+            const j = (i + 1) % vertices.items.len;
+
+            const e = vertices.items[j];
+            const sd = distances.items[i];
+            const ed = distances.items[j];
+            if (sd <= 0) clipped.appendAssumeCapacity(s); // back
+
+            if ((sd < 0 and ed > 0) or (ed < 0 and sd > 0)) {
+                const t = sd / (sd - ed);
+                var intersect = Vec3d.lerp(s, e, t);
+                // use plane's distance from origin, if plane's normal is a unit vector
+                if (clip_plane.normal.x() == 1) intersect.data[0] = -clip_plane.d;
+                if (clip_plane.normal.x() == -1) intersect.data[0] = clip_plane.d;
+                if (clip_plane.normal.y() == 1) intersect.data[1] = -clip_plane.d;
+                if (clip_plane.normal.y() == -1) intersect.data[1] = clip_plane.d;
+                if (clip_plane.normal.z() == 1) intersect.data[2] = -clip_plane.d;
+                if (clip_plane.normal.z() == -1) intersect.data[2] = clip_plane.d;
+                clipped.appendAssumeCapacity(intersect);
             }
         }
     }
@@ -132,86 +196,7 @@ pub const Face = struct {
     scale_x: f32,
     scale_y: f32,
 
-    vertices: std.ArrayList(Vec3d),
-
-    fn createVerticesFromPlaneWithRadius(self: *Face, radius: f32) !void {
-        const direction = closestAxis(self.plane.normal);
-        var up = if (direction.z() == 1) Vec3d.right() else Vec3d.new(0, 0, -1);
-        const upv = up.dot(self.plane.normal);
-        up = up.sub(self.plane.normal.scale(upv)).norm();
-        var right = up.cross(self.plane.normal);
-
-        up = up.scale(radius);
-        right = right.scale(radius);
-
-        const origin = self.plane.normal.scale(-self.plane.d);
-        self.vertices.clearRetainingCapacity();
-        try self.vertices.ensureTotalCapacity(4);
-        self.vertices.appendAssumeCapacity(origin.sub(right).sub(up));
-        self.vertices.appendAssumeCapacity(origin.add(right).sub(up));
-        self.vertices.appendAssumeCapacity(origin.add(right).add(up));
-        self.vertices.appendAssumeCapacity(origin.sub(right).add(up));
-    }
-
-    fn clip(self: *Face, clip_plane: Plane) !void {
-        const epsilon = 0.0001;
-
-        var distances = std.ArrayList(f64).init(self.vertices.allocator);
-        defer distances.deinit();
-        var cb: usize = 0;
-        var cf: usize = 0;
-        for (self.vertices.items) |vertex| {
-            var distance = clip_plane.normal.dot(vertex) + clip_plane.d;
-            if (distance < -epsilon) {
-                cb += 1;
-            } else if (distance > epsilon) {
-                cf += 1;
-            } else {
-                distance = 0;
-            }
-            try distances.append(distance);
-        }
-
-        if (cb == 0 and cf == 0) {
-            // co-planar
-            self.vertices.clearRetainingCapacity();
-            return;
-        } else if (cb == 0) {
-            // all vertices in front
-            self.vertices.clearRetainingCapacity();
-            return;
-        } else if (cf == 0) {
-            // all vertices in back;
-            // keep
-            return;
-        }
-
-        var clipped = std.ArrayList(Vec3d).init(self.vertices.allocator);
-        for (self.vertices.items, 0..) |s, i| {
-            const j = (i + 1) % self.vertices.items.len;
-
-            const e = self.vertices.items[j];
-            const sd = distances.items[i];
-            const ed = distances.items[j];
-            if (sd <= 0) try clipped.append(s); // back
-
-            if ((sd < 0 and ed > 0) or (ed < 0 and sd > 0)) {
-                const t = sd / (sd - ed);
-                var intersect = Vec3d.lerp(s, e, t);
-                // use plane's distance from origin, if plane's normal is a unit vector
-                if (clip_plane.normal.x() == 1) intersect.data[0] = -clip_plane.d;
-                if (clip_plane.normal.x() == -1) intersect.data[0] = clip_plane.d;
-                if (clip_plane.normal.y() == 1) intersect.data[1] = -clip_plane.d;
-                if (clip_plane.normal.y() == -1) intersect.data[1] = clip_plane.d;
-                if (clip_plane.normal.z() == 1) intersect.data[2] = -clip_plane.d;
-                if (clip_plane.normal.z() == -1) intersect.data[2] = clip_plane.d;
-                try clipped.append(intersect);
-            }
-        }
-
-        self.vertices.deinit();
-        self.vertices = clipped;
-    }
+    vertices: []Vec3d,
 };
 
 const Plane = struct {
@@ -224,6 +209,25 @@ const Plane = struct {
         const normal = Vec3d.cross(v0v1, v0v2).norm();
         const length = normal.dot(v0);
         return .{ .normal = normal, .d = -length };
+    }
+
+    fn makeQuadWithRadius(self: Plane, radius: f32) [4]Vec3d {
+        const direction = closestAxis(self.normal);
+        var up = if (direction.z() == 1) Vec3d.right() else Vec3d.new(0, 0, -1);
+        const upv = up.dot(self.normal);
+        up = up.sub(self.normal.scale(upv)).norm();
+        var right = up.cross(self.normal);
+
+        up = up.scale(radius);
+        right = right.scale(radius);
+
+        const origin = self.normal.scale(-self.d);
+        return .{
+            origin.sub(right).sub(up),
+            origin.add(right).sub(up),
+            origin.add(right).add(up),
+            origin.sub(right).add(up),
+        };
     }
 };
 
@@ -266,7 +270,7 @@ fn readSolid(allocator: Allocator, iter: *TokenIterator(u8, .any), error_info: *
         error_info.line_number += 1;
         switch (line[0]) {
             '/' => continue,
-            '(' => try solid.faces.append(try readFace(allocator, line)),
+            '(' => try solid.faces.append(try readFace(line)),
             '}' => break,
             else => return error.UnexpectedToken,
         }
@@ -275,9 +279,8 @@ fn readSolid(allocator: Allocator, iter: *TokenIterator(u8, .any), error_info: *
     return solid;
 }
 
-fn readFace(allocator: Allocator, line: []const u8) !Face {
+fn readFace(line: []const u8) !Face {
     var face: Face = undefined;
-    face.vertices = std.ArrayList(Vec3d).init(allocator);
     var iter = std.mem.tokenizeScalar(u8, line, ' ');
     const v0 = try readPoint(&iter);
     const v1 = try readPoint(&iter);
@@ -308,9 +311,33 @@ fn readPoint(iter: *TokenIterator(u8, .scalar)) !Vec3d {
 
 fn readDecimal(iter: *TokenIterator(u8, .scalar)) !f32 {
     const string = iter.next() orelse return error.UnexpectedEof;
-    return try std.fmt.parseFloat(f32, string);
+    return try parseFloat(string);
 }
 
 fn readSymbol(iter: *TokenIterator(u8, .scalar)) ![]const u8 {
     return iter.next() orelse return &.{};
+}
+
+// simpler float parsing function that runs quicker in debug
+fn parseFloat(string: []const u8) !f32 {
+    var signed: bool = false;
+    var decimal_point: usize = string.len - 1;
+    var decimal: f64 = 0;
+    for (string, 0..) |c, i| {
+        switch (c) {
+            '-' => signed = true,
+            '0'...'9' => {
+                const digit: f64 = @floatFromInt(c - '0');
+                decimal = 10 * decimal + digit;
+            },
+            '.' => decimal_point = i,
+            else => return error.UnexpectedCharacter,
+        }
+    }
+    if (signed) decimal *= -1;
+    if (decimal_point < string.len - 1) {
+        const denom = std.math.pow(f64, 10, @floatFromInt(string.len - 1 - decimal_point));
+        decimal /= denom;
+    }
+    return @floatCast(decimal);
 }

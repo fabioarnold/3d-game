@@ -151,8 +151,8 @@ pub const Model = struct {
                         material.texture = textures.findByName(face.texture_name);
                         try self.materials.append(material);
                     }
-                    vertex_count += face.vertices.items.len;
-                    index_count += 3 * (face.vertices.items.len - 2);
+                    vertex_count += face.vertices.len;
+                    index_count += 3 * (face.vertices.len - 2);
                 }
             }
         }
@@ -177,7 +177,7 @@ pub const Model = struct {
 
                     // add face vertices
                     const n = face.plane.normal.cast(f32);
-                    for (face.vertices.items) |vertex| {
+                    for (face.vertices) |vertex| {
                         const pos = vertex.cast(f32);
                         const uv = Vec2.new(
                             (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
@@ -196,7 +196,7 @@ pub const Model = struct {
                     }
 
                     // add indices
-                    for (0..face.vertices.items.len - 2) |i| {
+                    for (0..face.vertices.len - 2) |i| {
                         indices.appendAssumeCapacity(vertex_index + 0);
                         indices.appendAssumeCapacity(vertex_index + i + 1);
                         indices.appendAssumeCapacity(vertex_index + i + 2);

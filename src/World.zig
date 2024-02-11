@@ -85,9 +85,17 @@ pub const Strawberry = struct {
     const model = models.findByName("strawberry");
 
     fn draw(actor: *Actor, si: ShaderInfo) void {
-        const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
-        const model_mat = actor.getTransform().mul(scale);
-        model.draw(si, model_mat);
+        const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
+        const transform = actor.getTransform().mul(
+            Mat4.fromScale(Vec3.new(3, 3, 3)),
+        ).mul(Mat4.fromTranslate(
+            Vec3.new(0, 0, 2 * @sin(t * 2)),
+        ).mul(
+            Mat4.fromRotation(std.math.radiansToDegrees(f32, 3 * t), Vec3.new(0, 0, 1)),
+        ).mul(
+            Mat4.fromScale(Vec3.new(5, 5, 5)),
+        ));
+        model.draw(si, transform);
     }
 };
 

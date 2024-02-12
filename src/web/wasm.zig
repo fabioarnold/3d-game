@@ -74,6 +74,8 @@ export fn getStringLen(handle: String.Handle) usize {
 }
 
 pub extern fn isKeyDown(key: u32) bool;
+pub extern fn isButtonDown(button: u32) bool;
+pub extern fn getAxis(axis: u32) f32;
 
 pub extern fn inspectFloat(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32) void;
 pub extern fn inspectFloatRange(name_ptr: [*]const u8, name_len: usize, value_ptr: *f32, min: f32, max: f32) void;

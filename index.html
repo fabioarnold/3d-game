@@ -15,6 +15,7 @@
     <!-- <script src="js/dom.js"></script> -->
     <!-- <script src="js/audio.js"></script> -->
     <!-- <script src="js/canvas.js"></script> -->
+    <script src="js/input.js"></script>
     <script src="js/webgl.js"></script>
     <script src="js/wasm.js"></script>
     <script src="js/inspector.js"></script>
@@ -25,14 +26,12 @@
         // ...audio,
         // ...canvas,
         // ...zigdom,
+        ...input,
         ...webgl,
         isKeyDown,
       };
 
-      let keyState = [];
-      function isKeyDown(keyCode) {
-        return keyState[keyCode] === true;
-      }
+      isButtonDown(0);
 
       fetchAndInstantiate("zig-out/bin/main.wasm", { env }).then((instance) => {
         memory = instance.exports.memory;
@@ -104,14 +103,6 @@
           }
         });
 
-        document.addEventListener("keydown", (e) => {
-          keyState[e.keyCode] = true;
-          instance.exports.onKeyDown(e.keyCode);
-        });
-        document.addEventListener("keyup", (e) => {
-          keyState[e.keyCode] = false;
-          instance.exports.onKeyUp(e.keyCode);
-        });
         // document.addEventListener('mousedown', e => instance.exports.onMouseDown(e.button, e.x, e.y));
         // document.addEventListener('mouseup', e => instance.exports.onMouseUp(e.button, e.x, e.y));
         // document.addEventListener('mousemove', e => instance.exports.onMouseMove(e.x, e.y));

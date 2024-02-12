@@ -1,4 +1,7 @@
 const std = @import("std");
+const za = @import("zalgebra");
+const Vec3 = za.Vec3;
+const Quat = za.Quat;
 const gl = @import("web/webgl.zig");
 const wasm = @import("web/wasm.zig");
 const textures = @import("textures.zig");
@@ -19,7 +22,9 @@ var video_height: f32 = 720;
 var video_scale: f32 = 1;
 
 const State = struct {
-    camera: Camera = .{},
+    camera: Camera = .{
+        .position = Vec3.new(0, -800, 200),
+    },
 };
 var state: State = .{};
 
@@ -73,12 +78,6 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     state.camera.aspect_ratio = video_width / video_height;
 }
 
-export fn onKeyDown(key: c_uint) void {
-    _ = key;
-}
-export fn onKeyUp(key: c_uint) void {
-    _ = key;
-}
 export fn onMouseMove(x: c_int, y: c_int) void {
     const dx: f32 = @floatFromInt(x);
     const dy: f32 = @floatFromInt(y);
@@ -98,7 +97,25 @@ export fn onAnimationFrame() void {
     mrx = 0;
     mry = 0;
     state.camera.handleKeys();
-    state.camera.inspect();
+    // state.camera.inspect();
+
+    state.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
+    const x = Quat.fromAxis(state.camera.angles.x(), Vec3.new(1, 0, 0));
+    const y = Quat.fromAxis(state.camera.angles.y(), Vec3.new(0, 0, -1));
+    const orientation = y.mul(x);
+    const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
+    const move = Vec3.new(wasm.getAxis(0), -wasm.getAxis(1), 0);
+    if (move.length() > 0.1) {
+        const cam_move = y.rotateVec(move);
+        const radians = std.math.atan2(cam_move.x(), -cam_move.y());
+        world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
+        world.player.actor.position.data[0] += 5 * cam_move.x();
+        world.player.actor.position.data[1] += 5 * cam_move.y();
+        world.player.skinned_model.play("Run");
+    } else {
+        world.player.skinned_model.play("Idle");
+    }
+    state.camera.position = world.player.actor.position.add(cam_forward.scale(-300));
 
     world.draw(state.camera);
 }

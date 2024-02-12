@@ -149,14 +149,37 @@ pub const Player = struct {
     actor: Actor,
     skinned_model: SkinnedModel,
 
+    const hair_color = [_]f32{ 0.859, 0.173, 0, 1 };
+
     fn init(actor: *Actor) void {
         const player = @fieldParentPtr(Player, "actor", actor);
         player.skinned_model.model = models.findByName("player");
         player.skinned_model.play("Idle");
+        player.setHairColor(hair_color);
+    }
+
+    fn setHairColor(self: *Player, color: [4]f32) void {
+        for (self.skinned_model.model.gltf.data.materials.items) |*material| {
+            if (std.mem.eql(u8, material.name, "Hair")) {
+                material.metallic_roughness.base_color_factor = color;
+            }
+        }
     }
 
     fn update(actor: *Actor) void {
-        actor.angle += 1;
+        const self = @fieldParentPtr(Player, "actor", actor);
+        const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
+        const animate_hair = false and @mod(t, 10) < 5;
+        if (animate_hair) {
+            self.setHairColor([_]f32{
+                0.5 + 0.5 * @sin(3 * t),
+                0.5 + 0.5 * @sin(5 * t),
+                0.5 + 0.5 * @sin(7 * t),
+                1,
+            });
+        } else {
+            self.setHairColor(hair_color);
+        }
     }
 
     fn draw(actor: *Actor, si: ShaderInfo) void {
@@ -168,6 +191,7 @@ pub const Player = struct {
 };
 
 actors: std.ArrayList(*Actor),
+player: *Player,
 skybox: Skybox,
 
 var textured_unlit_shader: gl.GLuint = undefined;
@@ -178,6 +202,7 @@ var textured_skinned_viewprojection_loc: gl.GLint = undefined;
 var textured_skinned_model_loc: gl.GLint = undefined;
 var textured_skinned_joints_loc: gl.GLint = undefined;
 var textured_skinned_blend_skin_loc: gl.GLint = undefined;
+var textured_skinned_color_loc: gl.GLint = undefined;
 
 fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []const u8) gl.GLuint {
     const vert_shader = gl.glInitShader(vert_src.ptr, vert_src.len, gl.GL_VERTEX_SHADER);
@@ -212,8 +237,11 @@ pub fn loadShaders() void {
     textured_skinned_model_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_model");
     textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_joints");
     textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_blend_skin");
+    const textured_skinned_texture_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_texture");
+    textured_skinned_color_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_color");
     gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
-    gl.glUniform1i(gl.glGetUniformLocation(textured_skinned_shader, "u_texture"), 0);
+    gl.glUniform1i(textured_skinned_texture_loc, 0);
+    gl.glUniform4f(textured_skinned_color_loc, 1, 1, 1, 1);
 }
 
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
@@ -243,6 +271,7 @@ pub fn draw(self: World, camera: Camera) void {
         .model_loc = textured_skinned_model_loc,
         .joints_loc = textured_skinned_joints_loc,
         .blend_skin_loc = textured_skinned_blend_skin_loc,
+        .color_loc = textured_skinned_color_loc,
     };
     for (self.actors.items) |actor| {
         actor.update();

@@ -13,6 +13,7 @@ pub const ShaderInfo = struct {
     model_loc: gl.GLint,
     joints_loc: gl.GLint,
     blend_skin_loc: gl.GLint,
+    color_loc: gl.GLint,
 };
 
 gltf: zgltf,
@@ -129,9 +130,11 @@ pub fn drawWithTransforms(self: Model, si: ShaderInfo, model_mat: Mat4, global_t
         defer gl.glUniform1f(si.blend_skin_loc, 0);
 
         for (mesh.primitives.items) |primitive| {
-            const material = data.materials.items[primitive.material.?];
-            const texture = self.textures[material.metallic_roughness.base_color_texture.?.index];
+            const material = data.materials.items[primitive.material.?].metallic_roughness;
+            const texture = self.textures[material.base_color_texture.?.index];
             gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
+            const c = material.base_color_factor;
+            gl.glUniform4f(si.color_loc, c[0], c[1], c[2], c[3]);
             for (primitive.attributes.items) |attribute| {
                 switch (attribute) {
                     .position => |accessor_index| self.bindVertexAttrib(accessor_index, 0),

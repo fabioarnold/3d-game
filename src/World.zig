@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const utils = @import("utils.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
@@ -11,15 +12,18 @@ const ShaderInfo = Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
+pub const Player = @import("actors/Player.zig");
 const Map = @import("Map.zig");
 const logger = std.log.scoped(.world);
 
 const World = @This();
 
+pub var world: World = undefined;
+
 pub const Actor = struct {
     position: Vec3 = Vec3.zero(),
     angle: f32 = 0,
-    updateFn: *const fn (*Actor) void,
+    updateFn: *const fn (*Actor, f32) void,
     drawFn: *const fn (*Actor, ShaderInfo) void,
 
     pub fn create(comptime T: type, allocator: Allocator) !*T {
@@ -35,16 +39,16 @@ pub const Actor = struct {
         return t;
     }
 
-    fn getTransform(self: Actor) Mat4 {
+    pub fn getTransform(self: Actor) Mat4 {
         const r = Mat4.fromRotation(self.angle, Vec3.new(0, 0, 1));
         const t = Mat4.fromTranslate(self.position);
         return t.mul(r);
     }
 
-    fn updateNoOp(_: *Actor) void {}
+    fn updateNoOp(_: *Actor, _: f32) void {}
 
-    fn update(self: *Actor) void {
-        self.updateFn(self);
+    fn update(self: *Actor, dt: f32) void {
+        self.updateFn(self, dt);
     }
 
     fn draw(self: *Actor, si: ShaderInfo) void {
@@ -145,51 +149,6 @@ pub const Checkpoint = struct {
     }
 };
 
-pub const Player = struct {
-    actor: Actor,
-    skinned_model: SkinnedModel,
-
-    const hair_color = [_]f32{ 0.859, 0.173, 0, 1 };
-
-    fn init(actor: *Actor) void {
-        const player = @fieldParentPtr(Player, "actor", actor);
-        player.skinned_model.model = models.findByName("player");
-        player.skinned_model.play("Idle");
-        player.setHairColor(hair_color);
-    }
-
-    fn setHairColor(self: *Player, color: [4]f32) void {
-        for (self.skinned_model.model.gltf.data.materials.items) |*material| {
-            if (std.mem.eql(u8, material.name, "Hair")) {
-                material.metallic_roughness.base_color_factor = color;
-            }
-        }
-    }
-
-    fn update(actor: *Actor) void {
-        const self = @fieldParentPtr(Player, "actor", actor);
-        const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
-        const animate_hair = false and @mod(t, 10) < 5;
-        if (animate_hair) {
-            self.setHairColor([_]f32{
-                0.5 + 0.5 * @sin(3 * t),
-                0.5 + 0.5 * @sin(5 * t),
-                0.5 + 0.5 * @sin(7 * t),
-                1,
-            });
-        } else {
-            self.setHairColor(hair_color);
-        }
-    }
-
-    fn draw(actor: *Actor, si: ShaderInfo) void {
-        const player = @fieldParentPtr(Player, "actor", actor);
-        const transform = Mat4.fromScale(Vec3.new(15, 15, 15));
-        const model_mat = actor.getTransform().mul(transform);
-        player.skinned_model.draw(si, model_mat);
-    }
-};
-
 actors: std.ArrayList(*Actor),
 player: *Player,
 skybox: Skybox,
@@ -250,6 +209,86 @@ pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
     try Map.load(allocator, self, map_name);
 }
 
+const RayHit = struct {
+    point: Vec3,
+    normal: Vec3,
+    distance: f32,
+    actor: ?*Actor = null,
+    intersections: u32 = 0,
+};
+const RayCastOptions = struct {
+    ignore_backfaces: bool = true,
+};
+pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, options: RayCastOptions) ?RayHit {
+    var hit = RayHit{
+        .point = undefined,
+        .normal = undefined,
+        .distance = undefined,
+    };
+    var has_closest: ?f32 = null;
+
+    // TODO: comptue bounding box
+    // const p0 = point;
+    // const p1 = point.add(direction.scale(distance));
+
+    // TODO: solid grid query
+    // var solids = std.ArrayList(*Solid).init(allocator);
+    // defer solids.deinit();
+    for (self.solids) |solid| {
+        // TODO: flags
+
+        // TODO: bounds intersect
+
+        const verts = solid.vertices;
+
+        for (solid.faces) |face| {
+            if (options.ignore_backfaces and face.plane.normal.dot(direction) >= 0) continue;
+            if (face.plane.distance(point) > distance) continue;
+
+            for (0..face.vertices.len - 2) |i| {
+                if (utils.rayIntersectsTriangle(
+                    point,
+                    direction,
+                    verts[face.vertex_start + 0],
+                    verts[face.vertex_start + i + 1],
+                    verts[face.vertex_start + i + 2],
+                )) |dist| {
+                    if (dist > distance) continue;
+
+                    hit.intersections += 1;
+
+                    if (has_closest) |closest| {
+                        if (dist > closest) continue;
+                    }
+
+                    has_closest = dist;
+                    hit.point = point.add(direction.scale(dist));
+                    hit.normal = face.plane.normal;
+                    hit.distance = dist;
+                    hit.actor = &solid.actor;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (has_closest) return hit;
+    return null;
+}
+
+const WallHit = struct {
+    point: Vec3,
+    normal: Vec3,
+    actor: ?*Actor,
+    pushout: Vec3,
+};
+
+pub fn update(self: *World, dt: f32) void {
+    for (self.actors.items) |actor| {
+        actor.update(dt);
+    }
+}
+
 pub fn draw(self: World, camera: Camera) void {
     const view_projection = camera.projection().mul(camera.view());
 
@@ -274,7 +313,6 @@ pub fn draw(self: World, camera: Camera) void {
         .color_loc = textured_skinned_color_loc,
     };
     for (self.actors.items) |actor| {
-        actor.update();
         actor.draw(si);
     }
 }

@@ -4,10 +4,12 @@ const Vec3 = za.Vec3;
 const Quat = za.Quat;
 const gl = @import("web/webgl.zig");
 const wasm = @import("web/wasm.zig");
+const keys = @import("web/keys.zig");
 const textures = @import("textures.zig");
 const models = @import("models.zig");
 const Camera = @import("Camera.zig");
 const World = @import("World.zig");
+const world = &World.world;
 pub const std_options = struct {
     pub const log_level = .info;
     pub const logFn = wasm.log;
@@ -29,8 +31,6 @@ const State = struct {
 var state: State = .{};
 
 var loaded: bool = false; // all textures are loaded
-
-var world: World = undefined;
 
 export fn onLoadImages() void {
     textures.load();
@@ -96,25 +96,37 @@ export fn onAnimationFrame() void {
     state.camera.rotateView(mrx, mry);
     mrx = 0;
     mry = 0;
-    state.camera.handleKeys();
-    // state.camera.inspect();
+    if (false) {
+        state.camera.handleKeys();
+        state.camera.inspect();
+    }
 
     state.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
     const x = Quat.fromAxis(state.camera.angles.x(), Vec3.new(1, 0, 0));
     const y = Quat.fromAxis(state.camera.angles.y(), Vec3.new(0, 0, -1));
     const orientation = y.mul(x);
     const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
-    const move = Vec3.new(wasm.getAxis(0), -wasm.getAxis(1), 0);
-    if (move.length() > 0.1) {
+    var move = Vec3.new(wasm.getAxis(0), -wasm.getAxis(1), 0);
+    if (wasm.isKeyDown(keys.KEY_W)) move.data[1] += 1;
+    if (wasm.isKeyDown(keys.KEY_A)) move.data[0] -= 1;
+    if (wasm.isKeyDown(keys.KEY_S)) move.data[1] -= 1;
+    if (wasm.isKeyDown(keys.KEY_D)) move.data[0] += 1;
+    const length = move.length();
+    if (length > 0.1) {
+        if (length > 1) move = move.scale(1.0 / length);
         const cam_move = y.rotateVec(move);
         const radians = std.math.atan2(cam_move.x(), -cam_move.y());
         world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
-        world.player.actor.position.data[0] += 5 * cam_move.x();
-        world.player.actor.position.data[1] += 5 * cam_move.y();
+        world.player.velocity = cam_move.scale(5 * 60.0);
         world.player.skinned_model.play("Run");
     } else {
+        world.player.velocity = Vec3.zero();
         world.player.skinned_model.play("Idle");
     }
+
+    // TODO: compute delta time
+    world.update(1.0 / 60.0);
+
     state.camera.position = world.player.actor.position.add(cam_forward.scale(-300));
 
     world.draw(state.camera);

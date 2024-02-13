@@ -3,20 +3,12 @@ const za = @import("zalgebra");
 const gl = @import("../web/webgl.zig");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const Plane = @import("../geometry.zig").Plane;
 const ShaderInfo = @import("../Model.zig").ShaderInfo;
 const Map = @import("../Map.zig");
 const Actor = @import("Actor.zig");
 
 pub const Solid = @This();
-
-const Plane = struct {
-    normal: Vec3,
-    d: f32,
-
-    pub fn distance(self: Plane, v: Vec3) f32 {
-        return self.normal.dot(v) + self.d;
-    }
-};
 
 pub const Face = struct {
     plane: Plane,

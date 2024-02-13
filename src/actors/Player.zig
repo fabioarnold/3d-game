@@ -12,6 +12,8 @@ const world = &World.world;
 
 const Player = @This();
 
+const wall_pushout_dist = 3 * 5;
+
 actor: Actor,
 skinned_model: SkinnedModel,
 
@@ -81,7 +83,18 @@ fn popout(self: *Player, resolve_impact: bool) bool {
         }
     }
 
-    // TODO: walls
+    const solid_waist_test_pos = self.actor.position.add(Vec3.new(0, 0, 3 * 5));
+    const solid_head_test_pos = self.actor.position.add(Vec3.new(0, 0, 10 * 5));
+    for ([_]Vec3{ solid_waist_test_pos, solid_head_test_pos }) |test_pos| {
+        if (world.solidWallCheckNearest(test_pos, wall_pushout_dist)) |hit| {
+            self.actor.position = self.actor.position.add(hit.pushout);
+            if (resolve_impact) {
+                const dot = @min(0, self.velocity.norm().dot(hit.normal));
+                self.velocity = self.velocity.sub(hit.normal.scale(self.velocity.length() * dot));
+            }
+            return true;
+        }
+    }
 
     return false;
 }

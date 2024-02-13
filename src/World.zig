@@ -1,9 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const za = @import("zalgebra");
+const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
-const utils = @import("utils.zig");
+const geometry = @import("geometry.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
@@ -175,14 +176,10 @@ const RayCastOptions = struct {
     ignore_backfaces: bool = true,
 };
 pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, options: RayCastOptions) ?RayHit {
-    var hit = RayHit{
-        .point = undefined,
-        .normal = undefined,
-        .distance = undefined,
-    };
+    var hit: RayHit = undefined;
     var has_closest: ?f32 = null;
 
-    // TODO: comptue bounding box
+    // TODO: compute bounding box
     // const p0 = point;
     // const p1 = point.add(direction.scale(distance));
 
@@ -201,7 +198,7 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
             if (face.plane.distance(point) > distance) continue;
 
             for (0..face.vertex_count - 2) |i| {
-                if (utils.rayIntersectsTriangle(
+                if (geometry.rayIntersectsTriangle(
                     point,
                     direction,
                     verts[face.vertex_start + 0],
@@ -232,11 +229,91 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
 }
 
 const WallHit = struct {
+    pushout: Vec3,
     point: Vec3,
     normal: Vec3,
     actor: ?*Actor,
-    pushout: Vec3,
 };
+pub fn solidWallCheck(
+    self: World,
+    point: Vec3,
+    radius: f32,
+    hits: *std.ArrayListUnmanaged(WallHit),
+) void {
+    const flat_plane = geometry.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
+    const flat_point = Vec2.new(point.x(), point.y());
+
+    for (self.solids.items) |solid| {
+        // TODO: flags
+
+        // TODO: bounds intersect
+
+        const verts = solid.vertices.items;
+
+        for (solid.faces.items) |face| {
+            // ignore flat planes
+            if (face.plane.normal.z() <= -1 or face.plane.normal.z() >= 1)
+                continue;
+
+            // igore planes that are definitely too far away
+            const distance = face.plane.distance(point);
+            if (distance < 0 or distance > radius)
+                continue;
+
+            var has_closest: ?WallHit = null;
+
+            for (0..face.vertex_count - 2) |i| {
+                if (geometry.planeIntersectsTriangle(
+                    flat_plane,
+                    verts[face.vertex_start + 0],
+                    verts[face.vertex_start + i + 1],
+                    verts[face.vertex_start + i + 2],
+                )) |result| {
+                    const line0 = Vec2.new(result.line0.x(), result.line0.y());
+                    const line1 = Vec2.new(result.line1.x(), result.line1.y());
+                    const next = geometry.closestPointOnLine2D(flat_point, line0, line1);
+                    const diff = flat_point.sub(next);
+                    if (diff.dot(diff) > radius * radius)
+                        continue;
+
+                    const pushout = diff.norm().scale(radius - diff.length());
+                    if (has_closest) |closest| {
+                        if (pushout.dot(pushout) < closest.pushout.dot(closest.pushout))
+                            continue;
+                    }
+
+                    has_closest = WallHit{
+                        .pushout = Vec3.new(pushout.x(), pushout.y(), 0),
+                        .point = Vec3.new(next.x(), next.y(), point.z()),
+                        .normal = face.plane.normal,
+                        .actor = &solid.actor,
+                    };
+                }
+            }
+
+            if (has_closest) |closest| {
+                hits.appendAssumeCapacity(closest);
+                if (hits.items.len == hits.capacity) return;
+            }
+        }
+    }
+}
+
+pub fn solidWallCheckNearest(self: World, point: Vec3, radius: f32) ?WallHit {
+    var buffer: [8]WallHit = undefined;
+    var hits = std.ArrayListUnmanaged(WallHit).initBuffer(&buffer);
+    self.solidWallCheck(point, radius, &hits);
+    if (hits.items.len > 0) {
+        var nearest = &hits.items[0];
+        for (hits.items[1..]) |*hit| {
+            if (hit.pushout.dot(hit.pushout) > nearest.pushout.dot(nearest.pushout)) {
+                nearest = hit;
+            }
+        }
+        return nearest.*;
+    }
+    return null;
+}
 
 pub fn update(self: *World, dt: f32) void {
     for (self.actors.items) |actor| {

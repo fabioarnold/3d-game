@@ -12,6 +12,8 @@ const ShaderInfo = Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
+pub const Actor = @import("actors/Actor.zig");
+pub const Solid = @import("actors/Solid.zig");
 pub const Player = @import("actors/Player.zig");
 const Map = @import("Map.zig");
 const logger = std.log.scoped(.world);
@@ -20,62 +22,13 @@ const World = @This();
 
 pub var world: World = undefined;
 
-pub const Actor = struct {
-    position: Vec3 = Vec3.zero(),
-    angle: f32 = 0,
-    updateFn: *const fn (*Actor, f32) void,
-    drawFn: *const fn (*Actor, ShaderInfo) void,
-
-    pub fn create(comptime T: type, allocator: Allocator) !*T {
-        var t = try allocator.create(T);
-        t.actor = .{
-            .updateFn = if (@hasDecl(T, "update")) &@field(T, "update") else &updateNoOp,
-            .drawFn = &T.draw,
-        };
-        if (@hasDecl(T, "init")) {
-            const initFn = &@field(T, "init");
-            initFn(&t.actor);
-        }
-        return t;
-    }
-
-    pub fn getTransform(self: Actor) Mat4 {
-        const r = Mat4.fromRotation(self.angle, Vec3.new(0, 0, 1));
-        const t = Mat4.fromTranslate(self.position);
-        return t.mul(r);
-    }
-
-    fn updateNoOp(_: *Actor, _: f32) void {}
-
-    fn update(self: *Actor, dt: f32) void {
-        self.updateFn(self, dt);
-    }
-
-    fn draw(self: *Actor, si: ShaderInfo) void {
-        self.drawFn(self, si);
-    }
-};
-
-pub const Solid = struct {
-    actor: Actor,
-    collidable: bool = true,
-    model: Map.Model,
-
-    fn draw(actor: *Actor, si: ShaderInfo) void {
-        const solid = @fieldParentPtr(Solid, "actor", actor);
-        const model_mat = Mat4.fromTranslate(actor.position);
-        gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &model_mat.data[0]);
-        solid.model.draw();
-    }
-};
-
 pub const FloatingDecoration = struct {
     actor: Actor,
     model: Map.Model,
     rate: f32,
     offset: f32,
 
-    fn draw(actor: *Actor, si: ShaderInfo) void {
+    pub fn draw(actor: *Actor, si: ShaderInfo) void {
         const self = @fieldParentPtr(FloatingDecoration, "actor", actor);
         const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
         const model_mat = Mat4.fromTranslate(Vec3.new(0, 0, @sin(self.rate * t + self.offset) * 60.0));
@@ -88,7 +41,7 @@ pub const Strawberry = struct {
     actor: Actor,
     const model = models.findByName("strawberry");
 
-    fn draw(actor: *Actor, si: ShaderInfo) void {
+    pub fn draw(actor: *Actor, si: ShaderInfo) void {
         const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
         const transform = actor.getTransform().mul(
             Mat4.fromScale(Vec3.new(3, 3, 3)),
@@ -107,13 +60,13 @@ pub const Granny = struct {
     actor: Actor,
     skinned_model: SkinnedModel,
 
-    fn init(actor: *Actor) void {
+    pub fn init(actor: *Actor) void {
         const granny = @fieldParentPtr(Granny, "actor", actor);
         granny.skinned_model.model = models.findByName("granny");
         granny.skinned_model.play("Idle");
     }
 
-    fn draw(actor: *Actor, si: ShaderInfo) void {
+    pub fn draw(actor: *Actor, si: ShaderInfo) void {
         const granny = @fieldParentPtr(Granny, "actor", actor);
         const transform = Mat4.fromScale(Vec3.new(15, 15, 15)).mul(Mat4.fromTranslate(Vec3.new(0, 0, -0.5)));
         const model_mat = actor.getTransform().mul(transform);
@@ -125,7 +78,7 @@ pub const StaticProp = struct {
     actor: Actor,
     model: *Model,
 
-    fn draw(actor: *Actor, si: ShaderInfo) void {
+    pub fn draw(actor: *Actor, si: ShaderInfo) void {
         const static_prop = @fieldParentPtr(StaticProp, "actor", actor);
         static_prop.model.draw(si, actor.getTransform());
     }
@@ -138,7 +91,7 @@ pub const Checkpoint = struct {
     model_on: SkinnedModel,
     current: bool,
 
-    fn draw(actor: *Actor, si: ShaderInfo) void {
+    pub fn draw(actor: *Actor, si: ShaderInfo) void {
         const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
         const model_mat = actor.getTransform();
         if (checkpoint.current) {
@@ -150,6 +103,7 @@ pub const Checkpoint = struct {
 };
 
 actors: std.ArrayList(*Actor),
+solids: std.ArrayList(*Solid),
 player: *Player,
 skybox: Skybox,
 
@@ -205,6 +159,7 @@ pub fn loadShaders() void {
 
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
     self.actors = std.ArrayList(*Actor).init(allocator);
+    self.solids = std.ArrayList(*Solid).init(allocator);
     // self.clear()
     try Map.load(allocator, self, map_name);
 }
@@ -234,18 +189,18 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
     // TODO: solid grid query
     // var solids = std.ArrayList(*Solid).init(allocator);
     // defer solids.deinit();
-    for (self.solids) |solid| {
+    for (self.solids.items) |solid| {
         // TODO: flags
 
         // TODO: bounds intersect
 
-        const verts = solid.vertices;
+        const verts = solid.vertices.items;
 
-        for (solid.faces) |face| {
+        for (solid.faces.items) |face| {
             if (options.ignore_backfaces and face.plane.normal.dot(direction) >= 0) continue;
             if (face.plane.distance(point) > distance) continue;
 
-            for (0..face.vertices.len - 2) |i| {
+            for (0..face.vertex_count - 2) |i| {
                 if (utils.rayIntersectsTriangle(
                     point,
                     direction,
@@ -272,7 +227,7 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
         }
     }
 
-    if (has_closest) return hit;
+    if (has_closest) |_| return hit;
     return null;
 }
 

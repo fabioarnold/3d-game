@@ -1,3 +1,4 @@
+const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 
@@ -9,7 +10,7 @@ pub fn rayIntersectsTriangle(origin: Vec3, direction: Vec3, v0: Vec3, v1: Vec3, 
 
     // Check if the ray and triangle are parallel
     const dot = normal.dot(direction);
-    if (@abs(dot) < f32.epsilon) return null;
+    if (@abs(dot) < std.math.floatEps(f32)) return null;
 
     // Calculate the intersection point
     const ray_to_vertex = v0.sub(origin);
@@ -19,14 +20,14 @@ pub fn rayIntersectsTriangle(origin: Vec3, direction: Vec3, v0: Vec3, v1: Vec3, 
     if (t < 0) return null;
 
     // Calculate the barycentric coordinates
-    const intersection_point = origin + t * direction;
+    const intersection_point = origin.add(direction.scale(t));
     var u: f32 = undefined;
     var v: f32 = undefined;
     var w: f32 = undefined;
     calculateBarycentricCoordinates(intersection_point, v0, v1, v2, &u, &v, &w);
 
     // Check if the intersection point is inside the triangle
-    return u >= 0 and v >= 0 and w >= 0 and (u + v + w) <= 1;
+    return if (u >= 0 and v >= 0 and w >= 0 and (u + v + w) <= 1) t else null;
 }
 
 fn calculateBarycentricCoordinates(point: Vec3, v0: Vec3, v1: Vec3, v2: Vec3, u: *f32, v: *f32, w: *f32) void {

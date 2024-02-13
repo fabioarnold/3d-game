@@ -10,6 +10,7 @@ const assets = @import("assets");
 const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
 const World = @import("World.zig");
+const Solid = @import("actors/Solid.zig");
 const Skybox = @import("Skybox.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
@@ -35,7 +36,8 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
 
     const solid = try World.Actor.create(World.Solid, allocator);
-    solid.model = try Model.fromSolids(allocator, quake_map.worldspawn.solids.items);
+    try generateSolid(allocator, solid, quake_map.worldspawn.solids.items);
+    try world.solids.append(solid);
     try world.actors.append(&solid.actor);
 
     var prng = std.rand.DefaultPrng.init(0);
@@ -60,7 +62,7 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     try world.actors.append(&decoration_solid.actor);
 }
 
-fn loadActor(allocator: Allocator, world:  *World, entity: QuakeMap.Entity) !void {
+fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void {
     if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
         const name = try entity.getStringProperty("name");
 
@@ -102,6 +104,31 @@ fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
         return &static_prop.actor;
     } else {
         return null;
+    }
+}
+
+fn generateSolid(allocator: Allocator, into: *World.Solid, solids: []const QuakeMap.Solid) !void {
+    into.model = try Model.fromSolids(allocator, solids);
+    into.vertices = std.ArrayList(Vec3).init(allocator);
+    into.faces = std.ArrayList(Solid.Face).init(allocator);
+
+    for (solids) |solid| {
+        for (solid.faces.items) |face| {
+            if (std.mem.eql(u8, face.texture_name, "__TB_empty")) continue;
+            const vertex_index = into.vertices.items.len;
+            // TODO: skip too small faces
+            for (face.vertices) |vertex| {
+                try into.vertices.append(vertex.cast(f32));
+            }
+            try into.faces.append(.{
+                .plane = .{
+                    .normal = face.plane.normal.cast(f32),
+                    .d = @floatCast(face.plane.d),
+                },
+                .vertex_start = vertex_index,
+                .vertex_count = into.vertices.items.len - vertex_index,
+            });
+        }
     }
 }
 

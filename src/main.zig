@@ -124,6 +124,10 @@ export fn onAnimationFrame() void {
         world.player.skinned_model.play("Idle");
     }
 
+    // debug
+    if (wasm.isKeyDown(keys.KEY_Q)) world.player.velocity.data[2] -= 300;
+    if (wasm.isKeyDown(keys.KEY_E)) world.player.velocity.data[2] += 300;
+
     // TODO: compute delta time
     world.update(1.0 / 60.0);
 

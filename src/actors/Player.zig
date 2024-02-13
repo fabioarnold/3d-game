@@ -44,11 +44,12 @@ pub fn update(actor: *Actor, dt: f32) void {
 }
 
 fn sweepTestMove(self: *Player, delta: Vec3, resolve_impact: bool) void {
-    if (delta.dot(delta) <= 0) return;
-
     var resolve_wall_impact = true;
 
-    var remaining = delta.length();
+    const length_squared = delta.dot(delta);
+    if (length_squared < std.math.floatEps(f32)) return;
+
+    var remaining = @sqrt(length_squared);
     const step_size = 2.0; // TODO: increase step size?
     const step_normal = delta.scale(1.0 / remaining);
 
@@ -73,7 +74,14 @@ fn popout(self: *Player, resolve_impact: bool) bool {
         }
     }
 
-    // TODO: ceiling, walls
+    if (self.ceilingCheck()) |pushout| {
+        self.actor.position = self.actor.position.add(pushout);
+        if (resolve_impact) {
+            self.velocity.data[2] = @min(0, self.velocity.data[2]);
+        }
+    }
+
+    // TODO: walls
 
     return false;
 }
@@ -84,6 +92,7 @@ const GroundCheckResult = struct {
     floor: ?*Actor,
 };
 fn groundCheck(self: *Player) ?GroundCheckResult {
+    // TODO: times 5?
     const point = self.actor.position.add(Vec3.new(0, 0, 5));
     if (world.solidRayCast(point, Vec3.new(0, 0, -1), 5.01, .{})) |hit| {
         return .{
@@ -91,6 +100,16 @@ fn groundCheck(self: *Player) ?GroundCheckResult {
             .normal = hit.normal,
             .floor = hit.actor,
         };
+    }
+    return null;
+}
+
+fn ceilingCheck(self: *Player) ?Vec3 {
+    const height = 12 * 5;
+
+    const point = self.actor.position.add(Vec3.new(0, 0, 1));
+    if (world.solidRayCast(point, Vec3.new(0, 0, 1), height - 1, .{})) |hit| {
+        return hit.point.sub(self.actor.position.add(Vec3.new(0, 0, height)));
     }
     return null;
 }

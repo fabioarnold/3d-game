@@ -108,8 +108,8 @@
         // document.addEventListener('mousemove', e => instance.exports.onMouseMove(e.x, e.y));
 
         function step(timestamp) {
-          instance.exports.onAnimationFrame(timestamp);
           window.requestAnimationFrame(step);
+          instance.exports.onAnimationFrame(timestamp);
         }
 
         window.requestAnimationFrame(step);

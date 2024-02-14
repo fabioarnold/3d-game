@@ -117,10 +117,12 @@ export fn onAnimationFrame() void {
         const cam_move = y.rotateVec(move);
         const radians = std.math.atan2(cam_move.x(), -cam_move.y());
         world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
-        world.player.velocity = cam_move.scale(5 * 60.0);
+        world.player.velocity.data[0] = cam_move.x() * (5 * 60.0);
+        world.player.velocity.data[1] = cam_move.y() * (5 * 60.0);
         world.player.skinned_model.play("Run");
     } else {
-        world.player.velocity = Vec3.zero();
+        world.player.velocity.data[0] = 0;
+        world.player.velocity.data[1] = 0;
         world.player.skinned_model.play("Idle");
     }
 

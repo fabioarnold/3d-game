@@ -1,0 +1,1 @@
+pub var delta: f32 = 1.0 / 60.0; // in seconds

@@ -12,9 +12,9 @@ const logger = std.log.scoped(.skinned_model);
 const SkinnedModel = @This();
 
 model: *Model,
-animation_index: usize,
-animation_duration: f32,
-time: f32, // in seconds
+animation_index: usize = 0,
+animation_duration: f32 = 0,
+rate: f32 = 1,
 
 pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
     for (self.model.gltf.data.animations.items, 0..) |animation, i| {

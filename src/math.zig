@@ -118,3 +118,26 @@ fn calculateBarycentricCoordinates(
     v.* = (dot11 * dot2p - dot12 * dot1p) / denominator;
     w.* = 1 - u.* - v.*;
 }
+
+pub fn clampedMap(val: f32, min: f32, max: f32, new_min: f32, new_max: f32) f32 {
+    return std.math.clamp((val - min) / (max - min), 0, 1) * (new_max - new_min) + new_min;
+}
+
+pub fn approach(from: f32, target: f32, amount: f32) f32 {
+    if (target < from) {
+        return @max(from - amount, target);
+    } else {
+        return @min(from + amount, target);
+    }
+}
+
+pub fn approachVec2(from: Vec2, target: Vec2, amount: f32) Vec2 {
+    const vector = target.sub(from);
+    if (vector.dot(vector) <= amount * amount) return target;
+    return from.add(vector.norm().scale(amount));
+}
+
+pub fn angleFromXY(dir: Vec2) f32 {
+    const radians = std.math.atan2(dir.x(), -dir.y());
+    return std.math.radiansToDegrees(f32, radians);
+}

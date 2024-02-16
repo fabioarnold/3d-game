@@ -9,7 +9,7 @@ const Actor = @This();
 
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
-updateFn: *const fn (*Actor, f32) void,
+updateFn: *const fn (*Actor) void,
 drawFn: *const fn (*Actor, ShaderInfo) void,
 
 pub fn create(comptime T: type, allocator: Allocator) !*T {
@@ -31,10 +31,10 @@ pub fn getTransform(self: Actor) Mat4 {
     return t.mul(r);
 }
 
-fn updateNoOp(_: *Actor, _: f32) void {}
+fn updateNoOp(_: *Actor) void {}
 
-pub fn update(self: *Actor, dt: f32) void {
-    self.updateFn(self, dt);
+pub fn update(self: *Actor) void {
+    self.updateFn(self);
 }
 
 pub fn draw(self: *Actor, si: ShaderInfo) void {

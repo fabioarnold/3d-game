@@ -1,18 +1,21 @@
 const std = @import("std");
 const za = @import("zalgebra");
+const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
 const Quat = za.Quat;
 const gl = @import("web/webgl.zig");
 const wasm = @import("web/wasm.zig");
 const keys = @import("web/keys.zig");
+const time = @import("time.zig");
+const controls = @import("controls.zig");
 const textures = @import("textures.zig");
 const models = @import("models.zig");
 const Camera = @import("Camera.zig");
 const World = @import("World.zig");
 const world = &World.world;
-pub const std_options = struct {
-    pub const log_level = .info;
-    pub const logFn = wasm.log;
+pub const std_options = .{
+    .log_level = .info,
+    .logFn = wasm.log,
 };
 
 const logger = std.log.scoped(.main);
@@ -24,9 +27,9 @@ var video_height: f32 = 720;
 var video_scale: f32 = 1;
 
 const State = struct {
-    camera: Camera = .{
-        .position = Vec3.new(0, -800, 200),
-    },
+    // camera: Camera = .{
+    //     .position = Vec3.new(0, -800, 200),
+    // },
 };
 var state: State = .{};
 
@@ -75,7 +78,7 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     video_height = @floatFromInt(h);
     video_scale = s;
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
-    state.camera.aspect_ratio = video_width / video_height;
+    world.camera.aspect_ratio = video_width / video_height;
 }
 
 export fn onMouseMove(x: c_int, y: c_int) void {
@@ -93,7 +96,7 @@ export fn onAnimationFrame() void {
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
-    state.camera.rotateView(mrx, mry);
+    world.camera.rotateView(mrx, mry);
     mrx = 0;
     mry = 0;
     if (false) {
@@ -101,39 +104,44 @@ export fn onAnimationFrame() void {
         state.camera.inspect();
     }
 
-    state.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
-    const x = Quat.fromAxis(state.camera.angles.x(), Vec3.new(1, 0, 0));
-    const y = Quat.fromAxis(state.camera.angles.y(), Vec3.new(0, 0, -1));
+    controls.move = Vec2.new(wasm.getAxis(0), -wasm.getAxis(1));
+    if (wasm.isKeyDown(keys.KEY_W)) controls.move.data[1] += 1;
+    if (wasm.isKeyDown(keys.KEY_A)) controls.move.data[0] -= 1;
+    if (wasm.isKeyDown(keys.KEY_S)) controls.move.data[1] -= 1;
+    if (wasm.isKeyDown(keys.KEY_D)) controls.move.data[0] += 1;
+    const length = controls.move.length();
+    if (length > 1) controls.move = controls.move.scale(1.0 / length);
+    controls.jump = wasm.isButtonDown(0) or wasm.isKeyDown(keys.KEY_SPACE);
+
+    world.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
+    const x = Quat.fromAxis(world.camera.angles.x(), Vec3.new(1, 0, 0));
+    const y = Quat.fromAxis(world.camera.angles.y(), Vec3.new(0, 0, -1));
     const orientation = y.mul(x);
     const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
-    var move = Vec3.new(wasm.getAxis(0), -wasm.getAxis(1), 0);
-    if (wasm.isKeyDown(keys.KEY_W)) move.data[1] += 1;
-    if (wasm.isKeyDown(keys.KEY_A)) move.data[0] -= 1;
-    if (wasm.isKeyDown(keys.KEY_S)) move.data[1] -= 1;
-    if (wasm.isKeyDown(keys.KEY_D)) move.data[0] += 1;
-    const length = move.length();
-    if (length > 0.1) {
-        if (length > 1) move = move.scale(1.0 / length);
-        const cam_move = y.rotateVec(move);
-        const radians = std.math.atan2(cam_move.x(), -cam_move.y());
-        world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
-        world.player.velocity.data[0] = cam_move.x() * (5 * 60.0);
-        world.player.velocity.data[1] = cam_move.y() * (5 * 60.0);
-        world.player.skinned_model.play("Run");
-    } else {
-        world.player.velocity.data[0] = 0;
-        world.player.velocity.data[1] = 0;
-        world.player.skinned_model.play("Idle");
+    if (false) {
+        if (length > 0.1) {
+            const cam_move = y.rotateVec(Vec3.new(controls.move.x(), controls.move.y(), 0));
+            const radians = std.math.atan2(cam_move.x(), -cam_move.y());
+            world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
+            world.player.velocity.data[0] = cam_move.x() * (5 * 60.0);
+            world.player.velocity.data[1] = cam_move.y() * (5 * 60.0);
+            world.player.skinned_model.play("Run");
+        } else {
+            world.player.velocity.data[0] = 0;
+            world.player.velocity.data[1] = 0;
+            world.player.skinned_model.play("Idle");
+        }
+
+        // debug
+        if (wasm.isKeyDown(keys.KEY_Q)) world.player.velocity.data[2] = -300;
+        if (wasm.isKeyDown(keys.KEY_E)) world.player.velocity.data[2] = 300;
     }
 
-    // debug
-    if (wasm.isKeyDown(keys.KEY_Q)) world.player.velocity.data[2] -= 300;
-    if (wasm.isKeyDown(keys.KEY_E)) world.player.velocity.data[2] += 300;
-
     // TODO: compute delta time
-    world.update(1.0 / 60.0);
+    time.delta = 1.0 / 60.0;
+    world.update();
 
-    state.camera.position = world.player.actor.position.add(cam_forward.scale(-300));
+    world.camera.position = world.player.actor.position.add(cam_forward.scale(-300));
 
-    world.draw(state.camera);
+    world.draw(world.camera);
 }

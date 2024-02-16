@@ -4,7 +4,7 @@ const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
-const geometry = @import("geometry.zig");
+const math = @import("math.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const models = @import("models.zig");
@@ -21,7 +21,7 @@ const logger = std.log.scoped(.world);
 
 const World = @This();
 
-pub var world: World = undefined;
+pub var world: World = .{};
 
 pub const FloatingDecoration = struct {
     actor: Actor,
@@ -103,10 +103,14 @@ pub const Checkpoint = struct {
     }
 };
 
-actors: std.ArrayList(*Actor),
-solids: std.ArrayList(*Solid),
-player: *Player,
-skybox: Skybox,
+pub const death_plane = -100 * 5;
+
+camera: Camera = .{},
+
+actors: std.ArrayList(*Actor) = undefined,
+solids: std.ArrayList(*Solid) = undefined,
+player: *Player = undefined,
+skybox: Skybox = undefined,
 
 var textured_unlit_shader: gl.GLuint = undefined;
 var textured_unlit_mvp_loc: gl.GLint = undefined;
@@ -198,7 +202,7 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
             if (face.plane.distance(point) > distance) continue;
 
             for (0..face.vertex_count - 2) |i| {
-                if (geometry.rayIntersectsTriangle(
+                if (math.rayIntersectsTriangle(
                     point,
                     direction,
                     verts[face.vertex_start + 0],
@@ -240,7 +244,7 @@ pub fn solidWallCheck(
     radius: f32,
     hits: *std.ArrayListUnmanaged(WallHit),
 ) void {
-    const flat_plane = geometry.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
+    const flat_plane = math.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
     const flat_point = Vec2.new(point.x(), point.y());
 
     for (self.solids.items) |solid| {
@@ -263,7 +267,7 @@ pub fn solidWallCheck(
             var has_closest: ?WallHit = null;
 
             for (0..face.vertex_count - 2) |i| {
-                if (geometry.planeIntersectsTriangle(
+                if (math.planeIntersectsTriangle(
                     flat_plane,
                     verts[face.vertex_start + 0],
                     verts[face.vertex_start + i + 1],
@@ -271,7 +275,7 @@ pub fn solidWallCheck(
                 )) |result| {
                     const line0 = Vec2.new(result.line0.x(), result.line0.y());
                     const line1 = Vec2.new(result.line1.x(), result.line1.y());
-                    const next = geometry.closestPointOnLine2D(flat_point, line0, line1);
+                    const next = math.closestPointOnLine2D(flat_point, line0, line1);
                     const diff = flat_point.sub(next);
                     if (diff.dot(diff) > radius * radius)
                         continue;
@@ -304,20 +308,36 @@ pub fn solidWallCheckNearest(self: World, point: Vec3, radius: f32) ?WallHit {
     var hits = std.ArrayListUnmanaged(WallHit).initBuffer(&buffer);
     self.solidWallCheck(point, radius, &hits);
     if (hits.items.len > 0) {
-        var nearest = &hits.items[0];
+        var closest = &hits.items[0];
         for (hits.items[1..]) |*hit| {
-            if (hit.pushout.dot(hit.pushout) > nearest.pushout.dot(nearest.pushout)) {
-                nearest = hit;
+            if (hit.pushout.dot(hit.pushout) > closest.pushout.dot(closest.pushout)) {
+                closest = hit;
             }
         }
-        return nearest.*;
+        return closest.*;
     }
     return null;
 }
 
-pub fn update(self: *World, dt: f32) void {
+pub fn solidWallCheckClosestToNormal(self: World, point: Vec3, radius: f32, normal: Vec3) ?WallHit {
+    var buffer: [8]WallHit = undefined;
+    var hits = std.ArrayListUnmanaged(WallHit).initBuffer(&buffer);
+    self.solidWallCheck(point, radius, &hits);
+    if (hits.items.len > 0) {
+        var closest = &hits.items[0];
+        for (hits.items[1..]) |*hit| {
+            if (hit.normal.dot(normal) > closest.normal.dot(normal)) {
+                closest = hit;
+            }
+        }
+        return closest.*;
+    }
+    return null;
+}
+
+pub fn update(self: *World) void {
     for (self.actors.items) |actor| {
-        actor.update(dt);
+        actor.update();
     }
 }
 

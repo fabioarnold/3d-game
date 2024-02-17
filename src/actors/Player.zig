@@ -32,6 +32,7 @@ const gravity = 600 * 5;
 const max_fall = -120 * 5;
 const jump_hold_time = 0.1;
 const jump_speed = 90 * 5;
+const jump_xy_boost = 10 * 5;
 const coyote_time = 0.12;
 const wall_jump_xy_speed = max_speed * 1.3;
 
@@ -127,7 +128,7 @@ velocity: Vec3 = Vec3.zero(),
 prev_velocity: Vec3 = Vec3.zero(),
 ground_normal: Vec3 = Vec3.new(0, 0, 1),
 platform_velocity: Vec3 = Vec3.zero(),
-t_plaform_velocity_storage: f32 = 0,
+t_platform_velocity_storage: f32 = 0,
 t_ground_snap_cooldown: f32 = 0,
 climbing_wall_actor: ?*Actor = null,
 climbing_wall_normal: Vec3 = Vec3.zero(),
@@ -140,12 +141,35 @@ t_coyote: f32 = 0,
 coyote_z: f32 = 0,
 
 // normal state
-
 t_hold_jump: f32 = 0,
 hold_jump_speed: f32 = 0,
 auto_jump: bool = false,
 t_no_move: f32 = 0,
 t_footstep: f32 = 0,
+
+// dashing state
+dashes: u32 = 1,
+t_dash: f32 = 0,
+t_dash_cooldown: f32 = 0,
+t_dash_reset_cooldown: f32 = 0,
+t_dash_reset_flash: f32 = 0,
+t_no_dash_jump: f32 = 0,
+dashed_on_ground: bool = false,
+dash_trails_created: u32 = 0,
+
+// skidding state
+t_no_skid_jump: f32 = 0,
+
+// climbing state
+climb_corner_ease: f32 = 0,
+climb_corner_from: Vec3 = Vec3.zero(),
+climb_corner_to: Vec3 = Vec3.zero(),
+climb_corner_facing_from: Vec2 = Vec2.zero(),
+climb_corner_facing_to: Vec2 = Vec2.zero(),
+climb_corner_camera_from: ?Vec2 = null,
+climb_corner_camera_to: ?Vec2 = null,
+climb_input_sign: u32 = 1,
+t_climb_cooldown: f32 = 0,
 
 fn solidWaistTestPos(self: Player) Vec3 {
     return self.actor.position.add(Vec3.new(0, 0, 3 * 5));
@@ -169,6 +193,7 @@ pub fn init(actor: *Actor) void {
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
+    self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
 }
 
 fn relativeMoveInput() Vec2 {
@@ -217,7 +242,12 @@ pub fn update(actor: *Actor) void {
     {
         if (self.t_coyote > 0) self.t_coyote -= time.delta;
         if (self.t_hold_jump > 0) self.t_hold_jump -= time.delta;
+        if (self.t_dash_cooldown > 0) self.t_dash_cooldown -= time.delta;
+        if (self.t_dash_reset_flash > 0) self.t_dash_reset_flash -= time.delta;
+        if (self.t_no_move > 0) self.t_no_move -= time.delta;
+        if (self.t_platform_velocity_storage > 0) self.t_platform_velocity_storage -= time.delta;
         if (self.t_ground_snap_cooldown > 0) self.t_ground_snap_cooldown -= time.delta;
+        if (self.t_climb_cooldown > 0) self.t_climb_cooldown -= time.delta;
     }
 
     self.prev_velocity = self.velocity;
@@ -245,32 +275,111 @@ pub fn update(actor: *Actor) void {
 }
 
 fn lateUpdate(self: *Player) void {
-    // TODO: ground checks
+    // ground checks
     {
-        self.on_ground = self.groundCheck() != null;
-        if (self.on_ground) {
+        const prev_on_ground = self.on_ground;
+        if (self.groundCheck()) |result| {
+            self.on_ground = true;
+            self.actor.position = self.actor.position.add(result.pushout);
+
+            // on ground
+            self.auto_jump = false;
+            self.ground_normal = result.normal;
             self.t_coyote = coyote_time;
+            self.coyote_z = self.actor.position.z();
+            // if (tDashResetCooldown <= 0)
+            //     RefillDash();
+        } else {
+            self.on_ground = false;
+            self.ground_normal = Vec3.new(0, 0, 1);
+        }
+
+        // TODO: ground snap
+
+        if (!prev_on_ground and self.on_ground) {
+            // TODO: landing
         }
     }
 
     // TODO: update model
     {
-        // TODO: approach
-        self.actor.angle = math.angleFromXY(self.target_facing);
+        self.actor.angle = math.approachAngle(
+            self.actor.angle,
+            math.angleFromXY(self.target_facing),
+            2 * 360 * time.delta,
+        );
     }
 }
 
+fn cancelGroundSnap(self: *Player) void {
+    self.t_ground_snap_cooldown = 0.1;
+}
+
 fn jump(self: *Player) void {
+    self.actor.position.data[2] = self.coyote_z;
     self.velocity.data[2] = jump_speed;
     self.hold_jump_speed = jump_speed;
     self.t_hold_jump = jump_hold_time;
     self.t_coyote = 0;
-    self.t_ground_snap_cooldown = 0.1;
+    self.auto_jump = false;
+
+    var input = relativeMoveInput();
+    if (!input.eql(Vec2.zero())) {
+        input = input.norm();
+        self.target_facing = input;
+        self.velocity.data[0] += input.x() * jump_xy_boost;
+        self.velocity.data[1] += input.y() * jump_xy_boost;
+    }
+
+    self.cancelGroundSnap();
+
+    // AddPlatformVelocity(true);
+    // CancelGroundSnap();
+
+    // ModelScale = new(0.6, 0.6, 1.4);
+    // Audio.Play(Sfx.sfx_jump, Position);
 }
 
 fn wallJump(self: *Player) void {
-    _ = self;
-    // TODO
+    self.hold_jump_speed = jump_speed;
+    self.velocity.data[2] = jump_speed;
+    self.t_hold_jump = jump_hold_time;
+    self.auto_jump = false;
+
+    const vel_xy = self.target_facing.scale(wall_jump_xy_speed);
+    self.velocity.data[0] = vel_xy.x();
+    self.velocity.data[1] = vel_xy.y();
+
+    // AddPlatformVelocity(false);
+    self.cancelGroundSnap();
+
+    // ModelScale = new(0.6, 0.6, 1.4);
+    // Audio.Play(Sfx.sfx_jump, Position);
+}
+
+fn skidJump(self: *Player) void {
+    self.actor.position.data[2] = self.coyote_z;
+    self.hold_jump_speed = skid_jump_speed;
+    self.velocity.data[2] = skid_jump_speed;
+    self.t_hold_jump = skid_jump_hold_time;
+    self.t_coyote = 0;
+
+    const vel_xy = self.target_facing.scale(skid_jump_xy_speed);
+    self.velocity.data[0] = vel_xy.x();
+    self.velocity.data[1] = vel_xy.y();
+
+    // AddPlatformVelocity(false);
+    self.cancelGroundSnap();
+
+    // for (int i = 0; i < 16; i ++)
+    // {
+    // 	var dir = new Vec3(Calc.AngleToVector((i / 16f) * MathF.Tau), 0);
+    // 	World.Request<Dust>().Init(Position + dir * 8, new Vec3(velocity.XY() * 0.5f, 10) - dir * 50, 0x666666);
+    // }
+
+    // ModelScale = new(.6f, .6f, 1.4f);
+    // Audio.Play(Sfx.sfx_jump, Position);
+    // Audio.Play(Sfx.sfx_jump_skid, Position);
 }
 
 fn sweepTestMove(self: *Player, delta: Vec3, resolve_impact: bool) void {
@@ -451,9 +560,7 @@ fn stNormalUpdate(self: *Player) void {
                 if (input.dot(vel_xy.norm()) <= skid_dot_threshold) {
                     self.actor.angle = math.angleFromXY(input);
                     self.target_facing = input;
-                    // TODO self.state_machine.state = .skidding;
-                    logger.info("stNormalUpdate skidding", .{});
-
+                    self.state_machine.state = .skidding;
                     return;
                 } else {
                     // Rotate speed is less when travelling above our "true max" speed
@@ -528,5 +635,65 @@ fn stNormalUpdate(self: *Player) void {
         }
     } else {
         // use first frame of running animation
+    }
+}
+
+fn tryDash(self: *Player) bool {
+    if (self.dashes > 0 and self.t_dash_cooldown <= 0 and controls.dash) {
+        controls.dash = false; // consume
+        self.dashes -= 1;
+        self.state_machine.state = .dashing;
+        return true;
+    }
+    return false;
+}
+
+fn stSkiddingEnter(self: *Player) void {
+    self.t_no_skid_jump = 0.1;
+    self.skinned_model.play("Skid");
+    // Audio.Play(Sfx.sfx_skid, Position);
+
+    // for (int i = 0; i < 5; i ++)
+    //  World.Request<Dust>().Init(Position + new Vec3(targetFacing, 0) * i, new Vec3(-targetFacing, 0.0f).Normalized() * 50, 0x666666);
+}
+
+fn stSkiddingExit(self: *Player) void {
+    self.skinned_model.play("Idle");
+}
+
+fn stSkiddingUpdate(self: *Player) void {
+    if (self.t_no_skid_jump > 0)
+        self.t_no_skid_jump -= time.delta;
+
+    if (self.tryDash())
+        return;
+
+    if (relativeMoveInput().length() < 0.2 or relativeMoveInput().dot(self.target_facing) < 0.7 or !self.on_ground) {
+        //cancelling
+        self.state_machine.state = .normal;
+        return;
+    } else {
+        var vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+
+        // skid jump
+        if (self.t_no_skid_jump <= 0 and controls.jump) {
+            controls.jump = false; // consume
+            self.state_machine.state = .normal;
+            self.skidJump();
+            return;
+        }
+
+        const dot_matches = vel_xy.norm().dot(self.target_facing) >= 0.7;
+
+        // acceleration
+        const accel: f32 = if (dot_matches) skidding_accel else skidding_start_accel;
+        vel_xy = math.approachVec2(vel_xy, relativeMoveInput().scale(max_speed), accel * time.delta);
+        self.velocity = Vec3.new(vel_xy.x(), vel_xy.y(), self.velocity.z());
+
+        // reached target
+        if (dot_matches and vel_xy.length() >= end_skid_speed) {
+            self.state_machine.state = .normal;
+            return;
+        }
     }
 }

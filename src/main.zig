@@ -93,6 +93,10 @@ var mry: f32 = 0;
 export fn onAnimationFrame() void {
     if (!loaded) return;
 
+    time.now = @floatCast(wasm.performanceNow() / 1000.0);
+    time.delta = time.now - time.last;
+    defer time.last = time.now;
+
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
@@ -137,8 +141,6 @@ export fn onAnimationFrame() void {
         if (wasm.isKeyDown(keys.KEY_E)) world.player.velocity.data[2] = 300;
     }
 
-    // TODO: compute delta time
-    time.delta = 1.0 / 60.0;
     world.update();
 
     world.camera.position = world.player.actor.position.add(cam_forward.scale(-300));

@@ -137,6 +137,12 @@ pub fn approachVec2(from: Vec2, target: Vec2, amount: f32) Vec2 {
     return from.add(vector.norm().scale(amount));
 }
 
+pub fn approachAngle(from: f32, to: f32, amount: f32) f32 {
+    const diff = @mod(to - from + 180.0, 360.0) - 180.0;
+    if (@abs(diff) < amount) return to;
+    return from + std.math.clamp(diff, -amount, amount);
+}
+
 pub fn angleFromXY(dir: Vec2) f32 {
     const radians = std.math.atan2(dir.x(), -dir.y());
     return std.math.radiansToDegrees(f32, radians);

@@ -114,7 +114,19 @@ fn StateMachine(comptime I: type, S: type) type {
 }
 
 const Hair = struct {
-    something: i32 = 0,
+    wave: f32 = 0,
+
+    fn draw(hair: Hair, si: Model.ShaderInfo, transform: Mat4) void {
+        _ = hair;
+        const origin = Vec3.new(0, 1, -0.4);
+        const sphere_mat = transform.mul(Mat4.fromTranslate(origin));
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
+        gl.glUniform4f(si.color_loc, hair_color[0], hair_color[1], hair_color[2], hair_color[3]);
+        {
+            gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
+            primitives.drawSphere();
+        }
+    }
 };
 const hair_color = [_]f32{ 0.859, 0.173, 0, 1 };
 
@@ -491,17 +503,11 @@ fn ceilingCheck(self: *Player) ?Vec3 {
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const player = @fieldParentPtr(Player, "actor", actor);
-    const transform = Mat4.fromScale(Vec3.new(15, 15, 15));
-    const model_mat = actor.getTransform().mul(transform);
-    // player.skinned_model.draw(si, model_mat);
-    _ = player;
+    const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
+    const transform = actor.getTransform();
+    // player.skinned_model.draw(si, transform.mul(scale));
 
-    const translate = Mat4.fromTranslate(Vec3.new(0, 0, 1));
-    const sphere_mat = model_mat.mul(translate);
-    gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
-    gl.glUniform4f(si.color_loc, hair_color[0], hair_color[1], hair_color[2], hair_color[3]);
-    gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
-    primitives.drawSphere();
+    player.hair.draw(si, transform.mul(scale));
 }
 
 // state machine functions

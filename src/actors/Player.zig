@@ -7,6 +7,9 @@ const Mat4 = za.Mat4;
 const math = @import("../math.zig");
 const time = @import("../time.zig");
 const controls = @import("../controls.zig");
+const gl = @import("../web/webgl.zig");
+const primitives = @import("../primitives.zig");
+const textures = @import("../textures.zig");
 const World = @import("../World.zig");
 const Actor = World.Actor;
 const models = @import("../models.zig");
@@ -490,7 +493,15 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const player = @fieldParentPtr(Player, "actor", actor);
     const transform = Mat4.fromScale(Vec3.new(15, 15, 15));
     const model_mat = actor.getTransform().mul(transform);
-    player.skinned_model.draw(si, model_mat);
+    // player.skinned_model.draw(si, model_mat);
+    _ = player;
+
+    const translate = Mat4.fromTranslate(Vec3.new(0, 0, 1));
+    const sphere_mat = model_mat.mul(translate);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
+    gl.glUniform4f(si.color_loc, hair_color[0], hair_color[1], hair_color[2], hair_color[3]);
+    gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
+    primitives.drawSphere();
 }
 
 // state machine functions

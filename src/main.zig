@@ -8,6 +8,7 @@ const wasm = @import("web/wasm.zig");
 const keys = @import("web/keys.zig");
 const time = @import("time.zig");
 const controls = @import("controls.zig");
+const primitives = @import("primitives.zig");
 const textures = @import("textures.zig");
 const models = @import("models.zig");
 const Camera = @import("Camera.zig");
@@ -38,6 +39,7 @@ var loaded: bool = false; // all textures are loaded
 export fn onLoadImages() void {
     textures.load();
     models.load(allocator) catch unreachable;
+    primitives.load();
 }
 
 export fn onImagesLoaded() void {

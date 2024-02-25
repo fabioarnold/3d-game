@@ -325,24 +325,31 @@ fn lateUpdate(self: *Player) void {
     // ground checks
     {
         const prev_on_ground = self.on_ground;
-        if (self.groundCheck()) |result| {
-            self.on_ground = true;
-            self.actor.position = self.actor.position.add(result.pushout);
+        var result = self.groundCheck();
+        if (result) |r| {
+            self.actor.position = self.actor.position.add(r.pushout);
+        } else if (self.t_ground_snap_cooldown <= 0 and prev_on_ground) {
+            // ground snap
+            if (world.solidRayCast(self.actor.position, Vec3.new(0, 0, -1), 5 * 5, .{})) |hit| {
+                if (floorNormalCheck(hit.normal)) {
+                    self.actor.position = hit.point;
+                    result = self.groundCheck();
+                }
+            }
+        }
+        self.on_ground = result != null;
 
-            // on ground
+        if (result) |r| {
             self.auto_jump = false;
-            self.ground_normal = result.normal;
+            self.ground_normal = r.normal;
             self.t_coyote = coyote_time;
             self.coyote_z = self.actor.position.z();
             if (self.t_dash_reset_cooldown <= 0) {
                 self.refillDash(1);
             }
         } else {
-            self.on_ground = false;
             self.ground_normal = Vec3.new(0, 0, 1);
         }
-
-        // TODO: ground snap
 
         if (!prev_on_ground and self.on_ground) {
             const t = math.clampedMap(self.prev_velocity.z(), 0, max_fall, 0, 1);

@@ -326,7 +326,7 @@ fn lateUpdate(self: *Player) void {
     {
         self.actor.angle = math.approachAngle(
             self.actor.angle,
-            math.angleFromXY(self.target_facing),
+            math.angleFromDir(self.target_facing),
             2 * 360 * time.delta,
         );
     }
@@ -581,7 +581,7 @@ fn stNormalUpdate(self: *Player) void {
             // instead of using a simple approach to accelerate
             if (vel_xy.dot(vel_xy) >= rotate_threshold * rotate_threshold) {
                 if (input.dot(vel_xy.norm()) <= skid_dot_threshold) {
-                    self.actor.angle = math.angleFromXY(input);
+                    self.actor.angle = math.angleFromDir(input);
                     self.target_facing = input;
                     self.state_machine.setState(.skidding);
                     return;
@@ -593,8 +593,9 @@ fn stNormalUpdate(self: *Player) void {
                         rotate = rotate_speed_above_max;
                     }
 
-                    // TODO: self.target_facing = math.rotateToward(self.target_facing, input, rotate * time.delta, 0);
-                    self.target_facing = input;
+                    var facing_angle = math.angleFromDir(self.target_facing);
+                    facing_angle = math.approachAngle(facing_angle, math.angleFromDir(input), rotate * time.delta);
+                    self.target_facing = math.dirFromAngle(facing_angle);
                     vel_xy = self.target_facing.scale(math.approach(vel_xy.length(), max, accel * time.delta));
                 }
             } else {

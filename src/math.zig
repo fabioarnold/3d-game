@@ -143,7 +143,12 @@ pub fn approachAngle(from: f32, to: f32, amount: f32) f32 {
     return from + std.math.clamp(diff, -amount, amount);
 }
 
-pub fn angleFromXY(dir: Vec2) f32 {
+pub fn angleFromDir(dir: Vec2) f32 {
     const radians = std.math.atan2(dir.x(), -dir.y());
     return std.math.radiansToDegrees(f32, radians);
+}
+
+pub fn dirFromAngle(angle: f32) Vec2 {
+    const radians = std.math.degreesToRadians(f32, angle);
+    return Vec2.new(@sin(radians), -@cos(radians));
 }

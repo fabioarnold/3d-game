@@ -125,6 +125,7 @@ fn StateMachine(comptime I: type, S: type) type {
 const Hair = struct {
     wave: f32 = 0,
     nodes: [10]Vec3 = undefined,
+    color: [4]f32 = color_normal,
 
     fn update(self: *Hair, transform: Mat4) void {
         self.wave += time.delta;
@@ -138,7 +139,7 @@ const Hair = struct {
 
     fn draw(self: Hair, si: Model.ShaderInfo, transform: Mat4) void {
         gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
-        gl.glUniform4f(si.color_loc, hair_color[0], hair_color[1], hair_color[2], hair_color[3]);
+        gl.glUniform4f(si.color_loc, self.color[0], self.color[1], self.color[2], self.color[3]);
         for (self.nodes) |node| {
             const sphere_mat = transform.mul(Mat4.fromTranslate(node));
             gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
@@ -146,7 +147,6 @@ const Hair = struct {
         }
     }
 };
-const hair_color = [_]f32{ 0.859, 0.173, 0, 1 };
 const color_normal = [_]f32{ @as(comptime_float, 0xdb) / 255.0, @as(comptime_float, 0x2c) / 255.0, 0, 1 };
 const color_no_dash = [_]f32{ @as(comptime_float, 0x6e) / 255.0, @as(comptime_float, 0xc0) / 255.0, 1, 1 };
 const color_two_dashes = [_]f32{ @as(comptime_float, 0xfa) / 255.0, @as(comptime_float, 0x91) / 255.0, 1, 1 };
@@ -231,13 +231,14 @@ pub fn init(actor: *Actor) void {
         .state_machine = undefined,
     };
     self.skinned_model.play("Idle");
-    self.setHairColor(hair_color);
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
     self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
     self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
     self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit);
+
+    self.setHairColor(color_normal);
 }
 
 fn relativeMoveInput() Vec2 {
@@ -252,6 +253,7 @@ fn setHairColor(self: *Player, color: [4]f32) void {
             material.metallic_roughness.base_color_factor = color;
         }
     }
+    self.hair.color = color;
 }
 
 pub fn update(actor: *Actor) void {

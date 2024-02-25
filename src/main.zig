@@ -91,6 +91,10 @@ export fn onMouseMove(x: c_int, y: c_int) void {
 var mrx: f32 = 0;
 var mry: f32 = 0;
 
+var jump_last_down = false;
+var climb_last_down = false;
+var dash_last_down = false;
+
 export fn onAnimationFrame() void {
     if (!loaded) return;
 
@@ -112,31 +116,21 @@ export fn onAnimationFrame() void {
     if (wasm.isKeyDown(keys.KEY_D)) controls.move.data[0] += 1;
     const length = controls.move.length();
     if (length > 1) controls.move = controls.move.scale(1.0 / length);
-    controls.jump = wasm.isButtonDown(0) or wasm.isKeyDown(keys.KEY_SPACE);
+    controls.jump.down = wasm.isButtonDown(0) or wasm.isKeyDown(keys.KEY_SPACE);
+    controls.climb.down = wasm.isButtonDown(1) or wasm.isKeyDown(keys.KEY_CTRL);
+    controls.dash.down = wasm.isButtonDown(2) or wasm.isKeyDown(keys.KEY_SHIFT);
+    controls.jump.pressed = !jump_last_down and controls.jump.down;
+    jump_last_down = controls.jump.down;
+    controls.climb.pressed = !climb_last_down and controls.climb.down;
+    climb_last_down = controls.climb.down;
+    controls.dash.pressed = !dash_last_down and controls.dash.down;
+    dash_last_down = controls.dash.down;
 
     world.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
     const x = Quat.fromAxis(world.camera.angles.x(), Vec3.new(1, 0, 0));
     const y = Quat.fromAxis(world.camera.angles.y(), Vec3.new(0, 0, -1));
     const orientation = y.mul(x);
     const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
-    if (false) {
-        if (length > 0.1) {
-            const cam_move = y.rotateVec(Vec3.new(controls.move.x(), controls.move.y(), 0));
-            const radians = std.math.atan2(cam_move.x(), -cam_move.y());
-            world.player.actor.angle = std.math.radiansToDegrees(f32, radians);
-            world.player.velocity.data[0] = cam_move.x() * (5 * 60.0);
-            world.player.velocity.data[1] = cam_move.y() * (5 * 60.0);
-            world.player.skinned_model.play("Run");
-        } else {
-            world.player.velocity.data[0] = 0;
-            world.player.velocity.data[1] = 0;
-            world.player.skinned_model.play("Idle");
-        }
-
-        // debug
-        if (wasm.isKeyDown(keys.KEY_Q)) world.player.velocity.data[2] = -300;
-        if (wasm.isKeyDown(keys.KEY_E)) world.player.velocity.data[2] = 300;
-    }
 
     world.update();
 

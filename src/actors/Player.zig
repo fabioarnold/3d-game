@@ -35,6 +35,7 @@ const friction = 800 * 5;
 const air_friction_mult = 0.1;
 const gravity = 600 * 5;
 const max_fall = -120 * 5;
+const half_grav_threshold = 100 * 5;
 const jump_hold_time = 0.1;
 const jump_speed = 90 * 5;
 const jump_xy_boost = 10 * 5;
@@ -497,13 +498,13 @@ fn kill(self: *Player) void {
 }
 
 fn wallJumpCheck(self: *Player) bool {
-    if (controls.jump) {
+    if (controls.jump.pressed) {
         if (world.solidWallCheckClosestToNormal(
             self.solidWaistTestPos(),
             climb_check_dist,
             Vec3.new(-self.target_facing.x(), -self.target_facing.y(), 0),
         )) |hit| {
-            controls.jump = false; // consume
+            controls.jump.pressed = false; // consume
             self.actor.position = self.actor.position.add(hit.pushout.scale(wall_pushout_dist / climb_check_dist));
             const n_xy = Vec2.new(hit.normal.x(), hit.normal.y());
             self.target_facing = n_xy.norm();
@@ -665,18 +666,25 @@ fn stNormalUpdate(self: *Player) void {
     // TODO: dashing
 
     // jump & gavity
-    if (self.t_coyote > 0 and controls.jump) {
-        controls.jump = false; // consume
+    if (self.t_coyote > 0 and controls.jump.consumePress()) {
         self.jump();
     } else if (self.wallJumpCheck()) {
         self.wallJump();
     } else {
-        if (self.t_hold_jump > 0 and controls.jump) {
+        if (self.t_hold_jump > 0 and (self.auto_jump or controls.jump.down)) {
             if (self.velocity.z() < self.hold_jump_speed)
-                self.velocity.data[2] = self.hold_jump_speed;
+                self.velocity.zMut().* = self.hold_jump_speed;
         } else {
+            var mult: f32 = 1;
+            if ((controls.jump.down or self.auto_jump) and @abs(self.velocity.z()) < half_grav_threshold) {
+                mult = 0.5;
+            } else {
+                mult = 1;
+                self.auto_jump = false;
+            }
+
             // apply gravity
-            self.velocity.data[2] = @max(max_fall, self.velocity.z() - gravity * time.delta);
+            self.velocity.zMut().* = math.approach(self.velocity.z(), max_fall, gravity * mult * time.delta);
             self.t_hold_jump = 0;
         }
     }
@@ -699,8 +707,7 @@ fn stNormalUpdate(self: *Player) void {
 }
 
 fn tryDash(self: *Player) bool {
-    if (self.dashes > 0 and self.t_dash_cooldown <= 0 and controls.dash) {
-        controls.dash = false; // consume
+    if (self.dashes > 0 and self.t_dash_cooldown <= 0 and controls.dash.consumePress()) {
         self.dashes -= 1;
         self.state_machine.setState(.dashing);
         return true;
@@ -736,8 +743,7 @@ fn stSkiddingUpdate(self: *Player) void {
         var vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
 
         // skid jump
-        if (self.t_no_skid_jump <= 0 and controls.jump) {
-            controls.jump = false; // consume
+        if (self.t_no_skid_jump <= 0 and controls.jump.consumePress()) {
             self.state_machine.setState(.normal);
             self.skidJump();
             return;

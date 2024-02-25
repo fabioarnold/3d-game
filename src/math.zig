@@ -152,3 +152,11 @@ pub fn dirFromAngle(angle: f32) Vec2 {
     const radians = std.math.degreesToRadians(f32, angle);
     return Vec2.new(@sin(radians), -@cos(radians));
 }
+
+test "angle dir conversion" {
+    for ([_]f32{ 0.0, 90.0, 180, 270.0 }) |angle| {
+        const dir = dirFromAngle(angle);
+        const converted = @mod(angleFromDir(dir) + 360.0, 360.0);
+        try std.testing.expectApproxEqAbs(angle, converted, 0.001);
+    }
+}

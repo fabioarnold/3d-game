@@ -17,4 +17,12 @@ pub fn build(b: *std.Build) void {
     exe.rdynamic = true;
     exe.entry = .disabled;
     b.installArtifact(exe);
+
+    const tests = b.addTest(.{
+        .root_source_file = .{ .path = "src/tests.zig" },
+    });
+    tests.root_module.addImport("zalgebra", zalgebra_dep.module("zalgebra"));
+    const run_tests = b.addRunArtifact(tests);
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_tests.step);
 }

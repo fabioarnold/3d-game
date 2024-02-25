@@ -138,9 +138,17 @@ pub fn approachVec2(from: Vec2, target: Vec2, amount: f32) Vec2 {
 }
 
 pub fn approachAngle(from: f32, to: f32, amount: f32) f32 {
-    const diff = @mod(to - from + 180.0, 360.0) - 180.0;
+    const diff = angleDiff(from, to);
     if (@abs(diff) < amount) return to;
     return from + std.math.clamp(diff, -amount, amount);
+}
+
+pub fn angleDiff(a: f32, b: f32) f32 {
+    return @mod(@mod(b - a - 180.0, 360.0) + 360.0, 360.0) - 180.0;
+}
+
+pub fn angleLerp(from: f32, to: f32, alpha: f32) f32 {
+    return from + angleDiff(from, to) * alpha;
 }
 
 pub fn angleFromDir(dir: Vec2) f32 {
@@ -159,4 +167,12 @@ test "angle dir conversion" {
         const converted = @mod(angleFromDir(dir) + 360.0, 360.0);
         try std.testing.expectApproxEqAbs(angle, converted, 0.001);
     }
+}
+
+pub fn upwardPerpendicularNormal(v: Vec3) Vec3 {
+    const n = v.norm();
+    const arbitrary = if (@abs(n.x()) > @abs(n.y())) Vec3.new(0, 1, 0) else Vec3.new(1, 0, 0);
+    var result = n.cross(arbitrary).norm();
+    if (result.z() < 0) result = result.scale(-1);
+    return result;
 }

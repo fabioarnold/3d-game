@@ -117,7 +117,7 @@ export fn onAnimationFrame() void {
     const length = controls.move.length();
     if (length > 1) controls.move = controls.move.scale(1.0 / length);
     controls.jump.down = wasm.isButtonDown(0) or wasm.isKeyDown(keys.KEY_SPACE);
-    controls.climb.down = wasm.isButtonDown(1) or wasm.isKeyDown(keys.KEY_CTRL);
+    controls.climb.down = wasm.isButtonDown(1) or wasm.isKeyDown(keys.KEY_E);
     controls.dash.down = wasm.isButtonDown(2) or wasm.isKeyDown(keys.KEY_SHIFT);
     controls.jump.pressed = !jump_last_down and controls.jump.down;
     jump_last_down = controls.jump.down;

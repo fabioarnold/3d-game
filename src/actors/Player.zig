@@ -168,6 +168,8 @@ climbing_wall_normal: Vec3 = Vec3.zero(),
 
 on_ground: bool = false,
 target_facing: Vec2 = Vec2.new(0, 1),
+camera_target_forward: Vec3 = Vec3.new(0, 1, 0),
+camera_target_distance: f32 = 0.5,
 state_machine: StateMachine(Player, State),
 
 t_coyote: f32 = 0,
@@ -201,7 +203,7 @@ climb_corner_facing_from: Vec2 = Vec2.zero(),
 climb_corner_facing_to: Vec2 = Vec2.zero(),
 climb_corner_camera_from: ?Vec2 = null,
 climb_corner_camera_to: ?Vec2 = null,
-climb_input_sign: u32 = 1,
+climb_input_sign: f32 = 1,
 t_climb_cooldown: f32 = 0,
 
 fn solidWaistTestPos(self: Player) Vec3 {
@@ -226,7 +228,9 @@ pub fn init(actor: *Actor) void {
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
+    // self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
     self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
+    self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit);
 }
 
 fn relativeMoveInput() Vec2 {
@@ -389,7 +393,7 @@ fn jump(self: *Player) void {
 
     self.cancelGroundSnap();
 
-    // AddPlatformVelocity(true);
+    self.addPlatformVelocity(true);
     self.cancelGroundSnap();
 
     self.model_scale = Vec3.new(0.6, 0.6, 1.4);
@@ -406,7 +410,7 @@ fn wallJump(self: *Player) void {
     self.velocity.data[0] = vel_xy.x();
     self.velocity.data[1] = vel_xy.y();
 
-    // AddPlatformVelocity(false);
+    self.addPlatformVelocity(false);
     self.cancelGroundSnap();
 
     self.model_scale = Vec3.new(0.6, 0.6, 1.4);
@@ -424,7 +428,7 @@ fn skidJump(self: *Player) void {
     self.velocity.data[0] = vel_xy.x();
     self.velocity.data[1] = vel_xy.y();
 
-    // AddPlatformVelocity(false);
+    self.addPlatformVelocity(false);
     self.cancelGroundSnap();
 
     // for (int i = 0; i < 16; i ++)
@@ -489,12 +493,79 @@ fn popout(self: *Player, resolve_impact: bool) bool {
     return false;
 }
 
+fn addPlatformVelocity(self: *Player, play_sound: bool) void {
+    if (self.t_platform_velocity_storage > 0) {
+        var add = self.platform_velocity;
+        const add_xy = Vec2.new(add.x(), add.y());
+
+        add.zMut().* = std.math.clamp(add.z(), 0, 180 * 5);
+        const add_xy_length = add_xy.length();
+        if (add_xy_length > 300 * 5) {
+            add.xMut().* *= 300 + 5 / add_xy_length;
+            add.yMut().* *= 300 + 5 / add_xy_length;
+        }
+
+        self.velocity = self.velocity.add(add);
+        self.platform_velocity = Vec3.zero();
+        self.t_platform_velocity_storage = 0;
+
+        if (play_sound and (add.z() >= 10 * 5 or add_xy_length > 10 * 5)) {
+            //audio.play(sfx.sfx_jump_assisted, position);
+        }
+    }
+}
+
 fn kill(self: *Player) void {
     self.state_machine.setState(.dead);
     // storedCameraForward = cameraTargetForward;
     // storedCameraDistance = cameraTargetDistance;
     // Save.CurrentRecord.Deaths += 1;
     self.dead = true;
+}
+
+fn climbCheckAt(self: Player, offset: Vec3) ?World.WallHit {
+    const dir = Vec3.new(-self.target_facing.x(), -self.target_facing.y(), 0);
+    if (world.solidWallCheckClosestToNormal(self.solidWaistTestPos().add(offset), climb_check_dist, dir)) |hit| {
+        const rel_input = relativeMoveInput();
+        const hit_normal_xy = Vec2.new(hit.normal.x(), hit.normal.y());
+        if (rel_input.eql(Vec2.zero()) or hit_normal_xy.dot(rel_input) <= -0.5 and climbNormalCheck(hit.normal)) {
+            return hit;
+        }
+    }
+    return null;
+}
+
+fn tryClimb(self: *Player) bool {
+    var result = self.climbCheckAt(Vec3.zero());
+
+    // let us snap up to walls if we're jumping for them
+    // note: if vel.z is allowed to be downwards then we awkwardly re-grab when sliding off
+    // the bottoms of walls, which is really bad feeling
+    if (result == null and self.velocity.z() > 0 and !self.on_ground and self.state_machine.state != .climbing) {
+        result = self.climbCheckAt(Vec3.new(0, 0, 4 * 5));
+    }
+
+    if (result) |wall| {
+        self.climbing_wall_normal = wall.normal;
+        self.climbing_wall_actor = wall.actor;
+        var move_to = wall.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(wall.normal.scale(wall_pushout_dist));
+        self.sweepTestMove(move_to.sub(self.actor.position), false);
+        const climbing_wall_normal_xy = Vec2.new(self.climbing_wall_normal.x(), self.climbing_wall_normal.y());
+        self.target_facing = climbing_wall_normal_xy.norm().scale(-1);
+        return true;
+    } else {
+        self.climbing_wall_actor = null;
+        self.climbing_wall_normal = Vec3.zero();
+        return false;
+    }
+}
+
+fn climbNormalCheck(normal: Vec3) bool {
+    return @abs(normal.z()) < 0.35;
+}
+
+fn floorNormalCheck(normal: Vec3) bool {
+    return !climbNormalCheck(normal) and normal.z() > 0;
 }
 
 fn wallJumpCheck(self: *Player) bool {
@@ -661,9 +732,14 @@ fn stNormalUpdate(self: *Player) void {
 
     // TODO: footsteps
 
-    // TODO: start climbing
+    // start climbing
+    if (controls.climb.down and self.t_climb_cooldown <= 0 and self.tryClimb()) {
+        self.state_machine.setState(.climbing);
+        return;
+    }
 
-    // TODO: dashing
+    // dashing
+    if (self.tryDash()) return;
 
     // jump & gavity
     if (self.t_coyote > 0 and controls.jump.consumePress()) {
@@ -761,5 +837,221 @@ fn stSkiddingUpdate(self: *Player) void {
             self.state_machine.setState(.normal);
             return;
         }
+    }
+}
+
+fn stClimbingEnter(self: *Player) void {
+    self.skinned_model.play("Climb.Idle"); // true
+    self.skinned_model.rate = 1.8;
+    self.velocity = Vec3.zero();
+    self.climb_corner_ease = 0;
+    self.climb_input_sign = 1;
+    // Audio.Play(Sfx.sfx_grab, Position);
+}
+
+fn stClimbingExit(self: *Player) void {
+    self.skinned_model.play("Idle");
+    self.skinned_model.rate = 1;
+    self.climbing_wall_actor = null;
+    // sfxWallSlide?.Stop();
+}
+
+fn stClimbingUpdate(self: *Player) void {
+    if (!controls.climb.down) {
+        // audio.play(sfx.sfx_let_go, position);
+        self.state_machine.setState(.normal);
+        return;
+    }
+
+    if (controls.jump.consumePress()) {
+        self.state_machine.setState(.normal);
+        self.target_facing = self.target_facing.scale(-1);
+        self.wallJump();
+        return;
+    }
+
+    if (self.dashes > 0 and self.t_dash_cooldown <= 0 and controls.dash.consumePress()) {
+        self.state_machine.setState(.dashing);
+        self.dashes -= 1;
+        return;
+    }
+
+    self.cancelGroundSnap();
+
+    const forward = Vec3.new(self.target_facing.x(), self.target_facing.y(), 0);
+    var wall_up = math.upwardPerpendicularNormal(self.climbing_wall_normal);
+    var wall_right = Quat.fromAxis(-90, self.climbing_wall_normal).rotateVec(wall_up);
+    var force_corner: bool = false;
+    var wall_slide_sound_enabled = false;
+
+    // only change the input direction based on the camera when we stop moving
+    // so if we keep holding a direction, we keep moving the same way (even if it's flipped in the perspective)
+    if (@abs(controls.move.x()) < 0.5) {
+        const camera_target_forward_xy = Vec2.new(self.camera_target_forward.x(), self.camera_target_forward.y());
+        self.climb_input_sign = if (self.target_facing.dot(camera_target_forward_xy.norm()) < -0.4) -1 else 1;
+    }
+
+    var input_translated = controls.move;
+    input_translated.xMut().* *= self.climb_input_sign;
+    input_translated.yMut().* *= -1; // Celeste64 uses flipped y input
+
+    // move around
+    if (self.climb_corner_ease <= 0) {
+        const side = wall_right.scale(input_translated.x());
+        const up = wall_up.scale(-input_translated.y());
+        var move = side.add(up);
+
+        // cancel down vector if we're on the ground
+        if (move.z() < 0 and self.groundCheck() != null) {
+            move.zMut().* = 0;
+        }
+
+        // TODO: don't climb over ledges into spikes
+        // (you can still climb up into spikes if they're on the same wall as you)
+        // if (move.z > 0 and world.overlaps<spike_block>(position + vec3.unit_z * climb_check_dist + forward * (climb_check_dist + 1)))
+        // 	move.z = 0;
+
+        // TODO: don't move left/right around into a spikes
+        // (you can still climb up into spikes if they're on the same wall as you)
+        // if (world.overlaps<spike_block>(self.solidWaistTestPos() + side + forward * (climb_check_dist + 1)))
+        // 	move -= side;
+
+        if (@abs(move.x()) < 0.1) move.xMut().* = 0;
+        if (@abs(move.y()) < 0.1) move.yMut().* = 0;
+        if (@abs(move.z()) < 0.1) move.zMut().* = 0;
+
+        if (!move.eql(Vec3.zero()))
+            self.sweepTestMove(move.scale(climb_speed * time.delta), false);
+
+        if (@abs(input_translated.x()) < 0.25 and input_translated.y() >= 0) {
+            if (input_translated.y() > 0 and !self.on_ground) {
+                // TODO
+                // if (time.on_interval(0.05f))
+                // {
+                // 	var at = position + wall_up * 5 + new vec3(facing, 0) * 2;
+                // 	var vel = t_platform_velocity_storage > 0 ? platform_velocity : vec3.zero;
+                // 	world.request<dust>().init(at, vel);
+                // }
+                wall_slide_sound_enabled = true;
+            }
+
+            self.skinned_model.play("Climb.Idle");
+        } else {
+            self.skinned_model.play("Climb.Up");
+
+            // TODO
+            // if (time.on_interval(0.3f))
+            // 	audio.play(sfx.sfx_handhold, position);
+        }
+    } else { // perform corner lerp
+        const ease = 1.0 - self.climb_corner_ease;
+
+        self.velocity = Vec3.zero();
+        self.actor.position = Vec3.lerp(self.climb_corner_from, self.climb_corner_to, ease);
+        const angle = math.angleLerp(
+            math.angleFromDir(self.climb_corner_facing_from),
+            math.angleFromDir(self.climb_corner_facing_to),
+            ease,
+        );
+        self.target_facing = math.dirFromAngle(angle);
+
+        if (self.climb_corner_camera_from) |climb_corner_camera_from| {
+            if (self.climb_corner_camera_to) |climb_corner_camera_to| {
+                const cam_angle = math.angleLerp(
+                    math.angleFromDir(climb_corner_camera_from),
+                    math.angleFromDir(climb_corner_camera_to),
+                    ease * 0.5,
+                );
+                const dir = math.dirFromAngle(cam_angle);
+                self.camera_target_forward = Vec3.new(dir.x(), dir.y(), self.camera_target_forward.z());
+            }
+        }
+
+        self.climb_corner_ease = math.approach(self.climb_corner_ease, 0, time.delta / 0.2);
+        return;
+    }
+
+    // reset corner lerp data in case we use it
+    self.climb_corner_from = self.actor.position;
+    self.climb_corner_facing_from = self.target_facing;
+    self.climb_corner_camera_from = null;
+    self.climb_corner_camera_to = null;
+
+    // move around inner corners
+    var handled = false;
+    if (input_translated.x() != 0) {
+        if (world.solidRayCast(self.solidWaistTestPos(), wall_right.scale(input_translated.x()), climb_check_dist, .{})) |hit| {
+            self.actor.position = hit.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(hit.normal.scale(wall_pushout_dist));
+            self.target_facing = Vec2.new(-hit.normal.x(), -hit.normal.y());
+            self.climbing_wall_normal = hit.normal;
+            self.climbing_wall_actor = hit.actor;
+            handled = true;
+        }
+    }
+    // snap to walls that slope away from us
+    if (!handled) {
+        if (world.solidRayCast(self.solidWaistTestPos(), self.climbing_wall_normal.scale(-1), climb_check_dist + 2, .{})) |hit| {
+            if (climbNormalCheck(hit.normal)) {
+                self.actor.position = hit.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(hit.normal.scale(wall_pushout_dist));
+                self.target_facing = Vec2.new(-hit.normal.x(), -hit.normal.y());
+                self.climbing_wall_normal = hit.normal;
+                self.climbing_wall_actor = hit.actor;
+                handled = true;
+            }
+        }
+    }
+    // rotate around corners due to input
+    if (!handled and input_translated.x() != 0) {
+        const point = self.solidWaistTestPos().add(forward.scale(climb_check_dist + 1)).add(wall_right.scale(input_translated.x()));
+        if (world.solidRayCast(point, wall_right.scale(-input_translated.x()), climb_check_dist * 2, .{})) |hit| {
+            if (climbNormalCheck(hit.normal)) {
+                self.actor.position = hit.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(hit.normal.scale(wall_pushout_dist));
+                self.target_facing = Vec2.new(-hit.normal.x(), -hit.normal.y());
+                self.climbing_wall_normal = hit.normal;
+                self.climbing_wall_actor = hit.actor;
+
+                //if (vec2.dot(target_facing, camera_forward.xy().normalized()) < -.3f)
+                {
+                    self.climb_corner_camera_from = Vec2.new(self.camera_target_forward.x(), self.camera_target_forward.y());
+                    self.climb_corner_camera_to = self.target_facing;
+                }
+
+                self.skinned_model.play("Climb.Idle");
+                force_corner = true;
+                handled = true;
+            }
+        }
+    }
+    // hops over tops
+    if (!handled and input_translated.y() < 0 and self.climbCheckAt(Vec3.new(0, 0, 1)) == null) {
+        // audio.play(sfx.sfx_climb_ledge, self.actor.position);
+        self.state_machine.setState(.normal);
+        const facing_xy = self.target_facing.scale(climb_hop_forward_speed);
+        self.velocity = Vec3.new(facing_xy.x(), facing_xy.y(), climb_hop_up_speed);
+        self.t_no_move = climb_hop_no_move_time;
+        self.t_climb_cooldown = 0.3;
+        self.auto_jump = false;
+        self.addPlatformVelocity(false);
+        return;
+    }
+    // fall off
+    if (!handled and !self.tryClimb()) {
+        self.state_machine.setState(.normal);
+        return;
+    }
+
+    // TODO: update wall slide sfx
+    // if (wall_slide_sound_enabled)
+    // 	sfx_wall_slide?.resume();
+    // else
+    // 	sfx_wall_slide?.stop();
+
+    // rotate around corners nicely
+    if (force_corner or self.actor.position.sub(self.climb_corner_from).length() > 2 * 5) {
+        self.climb_corner_ease = 1.0;
+        self.climb_corner_to = self.actor.position;
+        self.climb_corner_facing_to = self.target_facing;
+        self.actor.position = self.climb_corner_from;
+        self.target_facing = self.climb_corner_facing_from;
     }
 }

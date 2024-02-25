@@ -233,7 +233,7 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
     return null;
 }
 
-const WallHit = struct {
+pub const WallHit = struct {
     pushout: Vec3,
     point: Vec3,
     normal: Vec3,

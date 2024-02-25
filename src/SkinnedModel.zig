@@ -6,6 +6,7 @@ const Quat = za.Quat;
 const Mat4 = za.Mat4;
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
+const time = @import("time.zig");
 const Model = @import("Model.zig");
 const logger = std.log.scoped(.skinned_model);
 
@@ -14,6 +15,7 @@ const SkinnedModel = @This();
 model: *Model,
 animation_index: usize = 0,
 animation_duration: f32 = 0,
+t: f32 = 0,
 rate: f32 = 1,
 
 pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
@@ -26,6 +28,14 @@ pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
     }
 }
 
+pub fn update(self: *SkinnedModel) void {
+    self.t += self.rate * time.delta;
+    if (self.t > self.animation_duration) {
+        // TODO: !looping
+        self.t = @mod(self.t, self.animation_duration);
+    }
+}
+
 pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
     const data = &self.model.gltf.data;
     const nodes = data.nodes.items;
@@ -35,17 +45,14 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
         local_transforms[i] = Transform.fromNode(node);
     }
 
-    const now: f32 = @floatCast(wasm.performanceNow() / 1000.0);
-    const t = @mod(now, self.animation_duration);
-
     const animation = data.animations.items[self.animation_index];
     for (animation.channels.items) |channel| {
         const sampler = animation.samplers.items[channel.sampler];
 
         switch (channel.target.property) {
-            .translation => local_transforms[channel.target.node].translation = self.sample(Vec3, sampler, t),
-            .rotation => local_transforms[channel.target.node].rotation = self.sample(Quat, sampler, t),
-            .scale => local_transforms[channel.target.node].scale = self.sample(Vec3, sampler, t),
+            .translation => local_transforms[channel.target.node].translation = self.sample(Vec3, sampler, self.t),
+            .rotation => local_transforms[channel.target.node].rotation = self.sample(Quat, sampler, self.t),
+            .scale => local_transforms[channel.target.node].scale = self.sample(Vec3, sampler, self.t),
             .weights => @panic("not implemented"),
         }
     }

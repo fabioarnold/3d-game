@@ -329,6 +329,8 @@ fn lateUpdate(self: *Player) void {
             math.angleFromDir(self.target_facing),
             2 * 360 * time.delta,
         );
+
+        self.skinned_model.update();
     }
 }
 
@@ -652,13 +654,15 @@ fn stNormalUpdate(self: *Player) void {
         const vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
         if (vel_xy.dot(vel_xy) > 1) {
             self.skinned_model.play("Run");
-            // TODO: map
-            // self.skinned_model.rate = Calc.ClampedMap(velXY.Length(), 0, MaxSpeed * 2, 0.1, 3);
+            self.skinned_model.rate = math.clampedMap(vel_xy.length(), 0, max_speed * 2, 0.1, 3);
         } else {
             self.skinned_model.play("Idle");
+            self.skinned_model.rate = 1;
         }
     } else {
         // use first frame of running animation
+        self.skinned_model.t = 0;
+        self.skinned_model.play("Run");
     }
 }
 

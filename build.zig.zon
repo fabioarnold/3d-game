@@ -1,5 +1,5 @@
 .{
-    .name = "hello-webgl",
+    .name = "adventure",
     .version = "0.0.1",
     .paths = .{
         "src",

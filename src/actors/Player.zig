@@ -2,8 +2,10 @@ const std = @import("std");
 const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
+const Vec4 = za.Vec4;
 const Quat = za.Quat;
 const Mat4 = za.Mat4;
+const zgltf = @import("zgltf");
 const math = @import("../math.zig");
 const time = @import("../time.zig");
 const controls = @import("../controls.zig");
@@ -121,14 +123,23 @@ fn StateMachine(comptime I: type, S: type) type {
 
 const Hair = struct {
     wave: f32 = 0,
+    nodes: [10]Vec3 = undefined,
 
-    fn draw(hair: Hair, si: Model.ShaderInfo, transform: Mat4) void {
-        _ = hair;
-        const origin = Vec3.new(0, 1, -0.4);
-        const sphere_mat = transform.mul(Mat4.fromTranslate(origin));
+    fn update(self: *Hair, transform: Mat4) void {
+        self.wave += time.delta;
+        const origin = transform.mulByVec4(Vec4.new(0, 1, -0.4, 1));
+        // logger.info("origin {d:.2} {d:.2} {d:.2}", .{origin.x(), origin.y(), origin.z()});
+        self.nodes[0] = Vec3.new(origin.x(), origin.y(), origin.z());
+        for (1..self.nodes.len) |i| {
+            self.nodes[i] = self.nodes[i - 1].add(Vec3.new(0, 0.5, -1).scale(1.0 / 15.0));
+        }
+    }
+
+    fn draw(self: Hair, si: Model.ShaderInfo, transform: Mat4) void {
         gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
         gl.glUniform4f(si.color_loc, hair_color[0], hair_color[1], hair_color[2], hair_color[3]);
-        {
+        for (self.nodes) |node| {
+            const sphere_mat = transform.mul(Mat4.fromTranslate(node));
             gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
             primitives.drawSphere();
         }
@@ -337,6 +348,21 @@ fn lateUpdate(self: *Player) void {
         );
 
         self.skinned_model.update();
+    }
+
+    // hair
+    {
+        const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
+        var hair_matrix = Mat4.identity();
+        const gltf_data = &self.skinned_model.model.gltf.data;
+        for (gltf_data.nodes.items) |node| {
+            if (std.mem.eql(u8, node.name, "Head")) {
+                hair_matrix = .{ .data = zgltf.getGlobalTransform(gltf_data, node) };
+                hair_matrix = z_up.mul(hair_matrix);
+                break;
+            }
+        }
+        self.hair.update(hair_matrix);
     }
 }
 

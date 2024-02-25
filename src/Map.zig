@@ -74,7 +74,9 @@ fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void
             world.player = player;
         } else {
             var checkpoint = try World.Actor.create(World.Checkpoint, allocator);
-            checkpoint.model_on.model = models.findByName("flag_on");
+            checkpoint.model_on = .{
+                .model = models.findByName("flag_on"),
+            };
             checkpoint.model_on.play("Idle");
             checkpoint.current = true;
             try handleActorCreation(world, entity, &checkpoint.actor);

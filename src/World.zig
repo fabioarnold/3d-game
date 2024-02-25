@@ -96,6 +96,7 @@ pub const Checkpoint = struct {
         const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
         const model_mat = actor.getTransform();
         if (checkpoint.current) {
+            checkpoint.model_on.update();
             checkpoint.model_on.draw(si, model_mat);
         } else {
             model_off.draw(si, model_mat);

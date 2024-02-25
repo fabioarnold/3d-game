@@ -147,6 +147,11 @@ const Hair = struct {
     }
 };
 const hair_color = [_]f32{ 0.859, 0.173, 0, 1 };
+const color_normal = [_]f32{ @as(comptime_float, 0xdb) / 255.0, @as(comptime_float, 0x2c) / 255.0, 0, 1 };
+const color_no_dash = [_]f32{ @as(comptime_float, 0x6e) / 255.0, @as(comptime_float, 0xc0) / 255.0, 1, 1 };
+const color_two_dashes = [_]f32{ @as(comptime_float, 0xfa) / 255.0, @as(comptime_float, 0x91) / 255.0, 1, 1 };
+const color_refill_flash = [_]f32{ 1, 1, 1, 1 };
+const color_feather = [_]f32{ @as(comptime_float, 0xf2) / 255.0, @as(comptime_float, 0xd4) / 255.0, @as(comptime_float, 0x50) / 255.0, 1 };
 
 actor: Actor,
 
@@ -174,6 +179,8 @@ state_machine: StateMachine(Player, State),
 
 t_coyote: f32 = 0,
 coyote_z: f32 = 0,
+
+last_dash_hair_color: [4]f32 = undefined,
 
 // normal state
 t_hold_jump: f32 = 0,
@@ -228,7 +235,7 @@ pub fn init(actor: *Actor) void {
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
-    // self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
+    self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
     self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
     self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit);
 }
@@ -280,6 +287,7 @@ pub fn update(actor: *Actor) void {
         if (self.t_coyote > 0) self.t_coyote -= time.delta;
         if (self.t_hold_jump > 0) self.t_hold_jump -= time.delta;
         if (self.t_dash_cooldown > 0) self.t_dash_cooldown -= time.delta;
+        if (self.t_dash_reset_cooldown > 0) self.t_dash_reset_cooldown -= time.delta;
         if (self.t_dash_reset_flash > 0) self.t_dash_reset_flash -= time.delta;
         if (self.t_no_move > 0) self.t_no_move -= time.delta;
         if (self.t_platform_velocity_storage > 0) self.t_platform_velocity_storage -= time.delta;
@@ -324,8 +332,9 @@ fn lateUpdate(self: *Player) void {
             self.ground_normal = result.normal;
             self.t_coyote = coyote_time;
             self.coyote_z = self.actor.position.z();
-            // if (tDashResetCooldown <= 0)
-            //     RefillDash();
+            if (self.t_dash_reset_cooldown <= 0) {
+                self.refillDash(1);
+            }
         } else {
             self.on_ground = false;
             self.ground_normal = Vec3.new(0, 0, 1);
@@ -340,7 +349,7 @@ fn lateUpdate(self: *Player) void {
         }
     }
 
-    // TODO: update model
+    // update model
     {
         self.model_scale.xMut().* = math.approach(self.model_scale.x(), 1, time.delta / 0.8);
         self.model_scale.yMut().* = math.approach(self.model_scale.y(), 1, time.delta / 0.8);
@@ -353,6 +362,20 @@ fn lateUpdate(self: *Player) void {
         );
 
         self.skinned_model.update();
+
+        if (self.state_machine.state != .feather and self.state_machine.state != .feather_start) {
+            var color: [4]f32 = undefined;
+            if (self.t_dash_reset_flash > 0) {
+                color = color_refill_flash;
+            } else if (self.dashes == 1) {
+                color = color_normal;
+            } else if (self.dashes == 0) {
+                color = color_no_dash;
+            } else {
+                color = color_two_dashes;
+            }
+            self.setHairColor(color);
+        }
     }
 
     // hair
@@ -377,7 +400,7 @@ fn cancelGroundSnap(self: *Player) void {
 
 fn jump(self: *Player) void {
     self.actor.position.data[2] = self.coyote_z;
-    self.velocity.data[2] = jump_speed;
+    self.velocity.zMut().* = jump_speed;
     self.hold_jump_speed = jump_speed;
     self.t_hold_jump = jump_hold_time;
     self.t_coyote = 0;
@@ -402,7 +425,7 @@ fn jump(self: *Player) void {
 
 fn wallJump(self: *Player) void {
     self.hold_jump_speed = jump_speed;
-    self.velocity.data[2] = jump_speed;
+    self.velocity.zMut().* = jump_speed;
     self.t_hold_jump = jump_hold_time;
     self.auto_jump = false;
 
@@ -418,9 +441,9 @@ fn wallJump(self: *Player) void {
 }
 
 fn skidJump(self: *Player) void {
-    self.actor.position.data[2] = self.coyote_z;
+    self.actor.position.zMut().* = self.coyote_z;
     self.hold_jump_speed = skid_jump_speed;
-    self.velocity.data[2] = skid_jump_speed;
+    self.velocity.zMut().* = skid_jump_speed;
     self.t_hold_jump = skid_jump_hold_time;
     self.t_coyote = 0;
 
@@ -440,6 +463,32 @@ fn skidJump(self: *Player) void {
     self.model_scale = Vec3.new(0.6, 0.6, 1.4);
     // Audio.Play(Sfx.sfx_jump, Position);
     // Audio.Play(Sfx.sfx_jump_skid, Position);
+}
+
+fn dashJump(self: *Player) void {
+    self.actor.position.zMut().* = self.coyote_z;
+    self.velocity.zMut().* = dash_jump_speed;
+    self.hold_jump_speed = dash_jump_hold_speed;
+    self.t_hold_jump = dash_jump_hold_time;
+    self.t_coyote = 0;
+    self.auto_jump = false;
+    self.dashes = 1;
+
+    if (dash_jump_xy_boost != 0) {
+        var input = relativeMoveInput();
+        if (!input.eql(Vec2.zero())) {
+            input = input.norm();
+            self.target_facing = input;
+            self.velocity = self.velocity.add(Vec3.new(input.x(), input.y(), 0).scale(dash_jump_xy_boost));
+        }
+    }
+
+    self.addPlatformVelocity(false);
+    self.cancelGroundSnap();
+
+    self.model_scale = Vec3.new(0.6, 0.6, 1.4);
+    // Audio.Play(Sfx.sfx_jump, Position);
+    // Audio.Play(Sfx.sfx_jump_superslide, Position);
 }
 
 fn sweepTestMove(self: *Player, delta: Vec3, resolve_impact: bool) void {
@@ -469,12 +518,12 @@ fn popout(self: *Player, resolve_impact: bool) bool {
     if (self.groundCheck()) |result| {
         self.actor.position = self.actor.position.add(result.pushout);
         if (resolve_impact) {
-            self.velocity.data[2] = @max(0, self.velocity.data[2]);
+            self.velocity.zMut().* = @max(0, self.velocity.z());
         }
     } else if (self.ceilingCheck()) |pushout| {
         self.actor.position = self.actor.position.add(pushout);
         if (resolve_impact) {
-            self.velocity.data[2] = @min(0, self.velocity.data[2]);
+            self.velocity.zMut().* = @min(0, self.velocity.z());
         }
     }
 
@@ -789,6 +838,87 @@ fn tryDash(self: *Player) bool {
         return true;
     }
     return false;
+}
+
+fn stDashingEnter(self: *Player) void {
+    if (!relativeMoveInput().eql(Vec2.zero()))
+        self.target_facing = relativeMoveInput();
+    self.actor.angle = math.angleFromDir(self.target_facing);
+
+    self.last_dash_hair_color = if (self.dashes <= 0) color_no_dash else color_normal;
+    self.dashed_on_ground = self.on_ground;
+    self.setDashSpeed(self.target_facing);
+    self.auto_jump = true;
+
+    self.t_dash = dash_time;
+    self.t_dash_reset_cooldown = dash_reset_cooldown;
+    self.t_no_dash_jump = 0.1;
+    self.dash_trails_created = 0;
+
+    // World.HitStun = .02f;
+
+    // if (dashes <= 1)
+    // 	Audio.Play(Sfx.sfx_dash_red, Position);
+    // else
+    // 	Audio.Play(Sfx.sfx_dash_pink, Position);
+
+    //CancelGroundSnap();
+}
+
+fn stDashingExit(self: *Player) void {
+    self.t_dash_cooldown = dash_cooldown;
+    // TODO
+    // self.createDashtTrail();
+}
+
+fn stDashingUpdate(self: *Player) void {
+    self.skinned_model.play("Dash");
+
+    self.t_dash -= time.delta;
+    if (self.t_dash <= 0) {
+        if (!self.on_ground) {
+            self.velocity = self.velocity.scale(dash_end_speed_mult);
+        }
+        self.state_machine.setState(.normal);
+        return;
+    }
+
+    if (self.dash_trails_created <= 0 or (self.dash_trails_created == 1 and self.t_dash <= dash_time * 0.5)) {
+        self.dash_trails_created += 1;
+        //self.create_dasht_trail();
+    }
+
+    if (!controls.move.eql(Vec2.zero()) and controls.move.dot(self.target_facing) >= -0.2) {
+        const angle = math.approachAngle(math.angleFromDir(self.target_facing), math.angleFromDir(relativeMoveInput()), dash_rotate_speed * time.delta);
+        self.target_facing = math.dirFromAngle(angle);
+        self.setDashSpeed(self.target_facing);
+    }
+
+    if (self.t_no_dash_jump > 0)
+        self.t_no_dash_jump -= time.delta;
+
+    // dash jump
+    if (self.dashed_on_ground and self.t_coyote > 0 and self.t_no_dash_jump <= 0 and controls.jump.consumePress()) {
+        self.state_machine.setState(.normal);
+        self.dashJump();
+        return;
+    }
+}
+
+fn refillDash(self: *Player, amount: u32) void {
+    if (self.dashes < amount) {
+        self.dashes = amount;
+        self.t_dash_reset_flash = 0.05;
+    }
+}
+
+fn setDashSpeed(self: *Player, dir: Vec2) void {
+    var boost = Vec3.new(dir.x(), dir.y(), 0);
+    if (!self.dashed_on_ground) {
+        boost.zMut().* = 0.4;
+        boost = boost.norm();
+    }
+    self.velocity = boost.scale(dash_speed);
 }
 
 fn stSkiddingEnter(self: *Player) void {

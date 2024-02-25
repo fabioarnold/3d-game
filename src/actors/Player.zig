@@ -107,6 +107,12 @@ fn StateMachine(comptime I: type, S: type) type {
             };
         }
 
+        fn setState(self: *Self, s: S) void {
+            self.function_table[@intFromEnum(self.state)].exitFn(self.instance);
+            self.state = s;
+            self.function_table[@intFromEnum(self.state)].enterFn(self.instance);
+        }
+
         fn update(self: *Self) void {
             self.function_table[@intFromEnum(self.state)].updateFn(self.instance);
         }
@@ -449,7 +455,7 @@ fn popout(self: *Player, resolve_impact: bool) bool {
 }
 
 fn kill(self: *Player) void {
-    self.state_machine.state = .dead;
+    self.state_machine.setState(.dead);
     // storedCameraForward = cameraTargetForward;
     // storedCameraDistance = cameraTargetDistance;
     // Save.CurrentRecord.Deaths += 1;
@@ -505,7 +511,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const player = @fieldParentPtr(Player, "actor", actor);
     const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
     const transform = actor.getTransform();
-    // player.skinned_model.draw(si, transform.mul(scale));
+    player.skinned_model.draw(si, transform.mul(scale));
 
     player.hair.draw(si, transform.mul(scale));
 }
@@ -577,7 +583,7 @@ fn stNormalUpdate(self: *Player) void {
                 if (input.dot(vel_xy.norm()) <= skid_dot_threshold) {
                     self.actor.angle = math.angleFromXY(input);
                     self.target_facing = input;
-                    self.state_machine.state = .skidding;
+                    self.state_machine.setState(.skidding);
                     return;
                 } else {
                     // Rotate speed is less when travelling above our "true max" speed
@@ -659,7 +665,7 @@ fn tryDash(self: *Player) bool {
     if (self.dashes > 0 and self.t_dash_cooldown <= 0 and controls.dash) {
         controls.dash = false; // consume
         self.dashes -= 1;
-        self.state_machine.state = .dashing;
+        self.state_machine.setState(.dashing);
         return true;
     }
     return false;
@@ -687,7 +693,7 @@ fn stSkiddingUpdate(self: *Player) void {
 
     if (relativeMoveInput().length() < 0.2 or relativeMoveInput().dot(self.target_facing) < 0.7 or !self.on_ground) {
         //cancelling
-        self.state_machine.state = .normal;
+        self.state_machine.setState(.normal);
         return;
     } else {
         var vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
@@ -695,7 +701,7 @@ fn stSkiddingUpdate(self: *Player) void {
         // skid jump
         if (self.t_no_skid_jump <= 0 and controls.jump) {
             controls.jump = false; // consume
-            self.state_machine.state = .normal;
+            self.state_machine.setState(.normal);
             self.skidJump();
             return;
         }
@@ -709,7 +715,7 @@ fn stSkiddingUpdate(self: *Player) void {
 
         // reached target
         if (dot_matches and vel_xy.length() >= end_skid_speed) {
-            self.state_machine.state = .normal;
+            self.state_machine.setState(.normal);
             return;
         }
     }

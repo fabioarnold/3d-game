@@ -318,12 +318,18 @@ fn lateUpdate(self: *Player) void {
         // TODO: ground snap
 
         if (!prev_on_ground and self.on_ground) {
+            const t = math.clampedMap(self.prev_velocity.z(), 0, max_fall, 0, 1);
+            self.model_scale = Vec3.lerp(Vec3.one(), Vec3.new(1.4, 1.4, 0.6), t);
             // TODO: landing
         }
     }
 
     // TODO: update model
     {
+        self.model_scale.xMut().* = math.approach(self.model_scale.x(), 1, time.delta / 0.8);
+        self.model_scale.yMut().* = math.approach(self.model_scale.y(), 1, time.delta / 0.8);
+        self.model_scale.zMut().* = math.approach(self.model_scale.z(), 1, time.delta / 0.8);
+
         self.actor.angle = math.approachAngle(
             self.actor.angle,
             math.angleFromDir(self.target_facing),
@@ -357,9 +363,9 @@ fn jump(self: *Player) void {
     self.cancelGroundSnap();
 
     // AddPlatformVelocity(true);
-    // CancelGroundSnap();
+    self.cancelGroundSnap();
 
-    // ModelScale = new(0.6, 0.6, 1.4);
+    self.model_scale = Vec3.new(0.6, 0.6, 1.4);
     // Audio.Play(Sfx.sfx_jump, Position);
 }
 
@@ -376,7 +382,7 @@ fn wallJump(self: *Player) void {
     // AddPlatformVelocity(false);
     self.cancelGroundSnap();
 
-    // ModelScale = new(0.6, 0.6, 1.4);
+    self.model_scale = Vec3.new(0.6, 0.6, 1.4);
     // Audio.Play(Sfx.sfx_jump, Position);
 }
 
@@ -400,7 +406,7 @@ fn skidJump(self: *Player) void {
     // 	World.Request<Dust>().Init(Position + dir * 8, new Vec3(velocity.XY() * 0.5f, 10) - dir * 50, 0x666666);
     // }
 
-    // ModelScale = new(.6f, .6f, 1.4f);
+    self.model_scale = Vec3.new(0.6, 0.6, 1.4);
     // Audio.Play(Sfx.sfx_jump, Position);
     // Audio.Play(Sfx.sfx_jump_skid, Position);
 }
@@ -510,12 +516,12 @@ fn ceilingCheck(self: *Player) ?Vec3 {
 }
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
-    const player = @fieldParentPtr(Player, "actor", actor);
-    const scale = Mat4.fromScale(Vec3.new(15, 15, 15));
+    const self = @fieldParentPtr(Player, "actor", actor);
+    const scale = Mat4.fromScale(self.model_scale.scale(15));
     const transform = actor.getTransform();
-    player.skinned_model.draw(si, transform.mul(scale));
+    self.skinned_model.draw(si, transform.mul(scale));
 
-    player.hair.draw(si, transform.mul(scale));
+    self.hair.draw(si, transform.mul(scale));
 }
 
 // state machine functions

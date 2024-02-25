@@ -28,11 +28,8 @@ var video_height: f32 = 720;
 var video_scale: f32 = 1;
 
 const State = struct {
-    // camera: Camera = .{
-    //     .position = Vec3.new(0, -800, 200),
-    // },
+    camera: Camera,
 };
-var state: State = .{};
 
 var loaded: bool = false; // all textures are loaded
 
@@ -62,10 +59,12 @@ export fn onLoadSnapshot(handle: wasm.String.Handle) void {
         return;
     };
     defer parsed.deinit();
-    state = parsed.value;
+    const state = parsed.value;
+    world.camera = state.camera;
 }
 
 export fn onSaveSnapshot() wasm.String.Handle {
+    const state = State{ .camera = world.camera };
     var array = std.ArrayList(u8).init(allocator);
     std.json.stringify(state, .{}, array.writer()) catch |e| {
         logger.err("Snapshot saving failed {}", .{e});
@@ -105,10 +104,6 @@ export fn onAnimationFrame() void {
     world.camera.rotateView(mrx, mry);
     mrx = 0;
     mry = 0;
-    if (false) {
-        state.camera.handleKeys();
-        state.camera.inspect();
-    }
 
     controls.move = Vec2.new(wasm.getAxis(0), -wasm.getAxis(1));
     if (wasm.isKeyDown(keys.KEY_W)) controls.move.data[1] += 1;

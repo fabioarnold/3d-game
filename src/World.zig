@@ -63,7 +63,7 @@ pub const Granny = struct {
 
     pub fn init(actor: *Actor) void {
         const granny = @fieldParentPtr(Granny, "actor", actor);
-        granny.skinned_model.model = models.findByName("granny");
+        granny.skinned_model = .{ .model = models.findByName("granny") };
         granny.skinned_model.play("Idle");
     }
 
@@ -71,6 +71,7 @@ pub const Granny = struct {
         const granny = @fieldParentPtr(Granny, "actor", actor);
         const transform = Mat4.fromScale(Vec3.new(15, 15, 15)).mul(Mat4.fromTranslate(Vec3.new(0, 0, -0.5)));
         const model_mat = actor.getTransform().mul(transform);
+        granny.skinned_model.update();
         granny.skinned_model.draw(si, model_mat);
     }
 };

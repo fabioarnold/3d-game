@@ -1129,7 +1129,7 @@ fn stClimbingUpdate(self: *Player) void {
     }
     // snap to walls that slope away from us
     if (!handled) {
-        if (world.solidRayCast(self.solidWaistTestPos(), self.climbing_wall_normal.scale(-1), climb_check_dist + 2, .{})) |hit| {
+        if (world.solidRayCast(self.solidWaistTestPos(), self.climbing_wall_normal.scale(-1), climb_check_dist + 2 * 5, .{})) |hit| {
             if (climbNormalCheck(hit.normal)) {
                 self.actor.position = hit.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(hit.normal.scale(wall_pushout_dist));
                 self.target_facing = Vec2.new(-hit.normal.x(), -hit.normal.y());
@@ -1141,7 +1141,7 @@ fn stClimbingUpdate(self: *Player) void {
     }
     // rotate around corners due to input
     if (!handled and input_translated.x() != 0) {
-        const point = self.solidWaistTestPos().add(forward.scale(climb_check_dist + 1)).add(wall_right.scale(input_translated.x()));
+        const point = self.solidWaistTestPos().add(forward.scale(climb_check_dist + 1 * 5)).add(wall_right.scale(input_translated.x()));
         if (world.solidRayCast(point, wall_right.scale(-input_translated.x()), climb_check_dist * 2, .{})) |hit| {
             if (climbNormalCheck(hit.normal)) {
                 self.actor.position = hit.point.add(self.actor.position.sub(self.solidWaistTestPos())).add(hit.normal.scale(wall_pushout_dist));

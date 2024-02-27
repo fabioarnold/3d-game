@@ -123,6 +123,7 @@ var textured_skinned_model_loc: gl.GLint = undefined;
 var textured_skinned_joints_loc: gl.GLint = undefined;
 var textured_skinned_blend_skin_loc: gl.GLint = undefined;
 var textured_skinned_color_loc: gl.GLint = undefined;
+var textured_skinned_effects_loc: gl.GLint = undefined;
 
 fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []const u8) gl.GLuint {
     const vert_shader = gl.glInitShader(vert_src.ptr, vert_src.len, gl.GL_VERTEX_SHADER);
@@ -159,9 +160,14 @@ pub fn loadShaders() void {
     textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_blend_skin");
     const textured_skinned_texture_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_texture");
     textured_skinned_color_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_color");
+    const textured_skinned_sun_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_sun");
+    textured_skinned_effects_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_effects");
     gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
     gl.glUniform1i(textured_skinned_texture_loc, 0);
     gl.glUniform4f(textured_skinned_color_loc, 1, 1, 1, 1);
+    const sun = Vec3.new(0, -0.7, -1.0).norm();
+    gl.glUniform3f(textured_skinned_sun_loc, sun.x(), sun.y(), sun.z());
+    gl.glUniform1f(textured_skinned_effects_loc, 1);
 }
 
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
@@ -365,6 +371,7 @@ pub fn draw(self: World, camera: Camera) void {
         .joints_loc = textured_skinned_joints_loc,
         .blend_skin_loc = textured_skinned_blend_skin_loc,
         .color_loc = textured_skinned_color_loc,
+        .effects_loc = textured_skinned_effects_loc,
     };
     for (self.actors.items) |actor| {
         actor.draw(si);

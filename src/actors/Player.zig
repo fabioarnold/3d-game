@@ -123,25 +123,62 @@ fn StateMachine(comptime I: type, S: type) type {
 }
 
 const Hair = struct {
+    const forward_offset_per_node = 0.5;
+
     wave: f32 = 0,
     nodes: [10]Vec3 = undefined,
     color: [4]f32 = color_normal,
+    squish: Vec3 = Vec3.new(1, 1, 1),
+    forward: Vec3 = Vec3.new(0, 0, 1),
 
     fn update(self: *Hair, transform: Mat4) void {
-        self.wave += time.delta;
-        const origin = transform.mulByVec4(Vec4.new(0, 1, -0.4, 1));
-        // logger.info("origin {d:.2} {d:.2} {d:.2}", .{origin.x(), origin.y(), origin.z()});
+        self.wave += time.delta * 4.0;
+        const offset_per_node = self.forward.scale(forward_offset_per_node).add(Vec3.new(0, 0, -1));
+        const origin = transform.mulByVec4(Vec4.new(0.5, 11.0, -3, 1));
+        const step = offset_per_node.scale(5);
+
+        // start hair offset
         self.nodes[0] = Vec3.new(origin.x(), origin.y(), origin.z());
+
+        // targets
+        var target = self.nodes[0];
+        var prev = self.nodes[0];
+        const maxdist = 0.8 * 5;
+        const side = Quat.fromAxis(-90, Vec3.new(0, 0, 1)).rotateVec(self.forward);
+
         for (1..self.nodes.len) |i| {
-            self.nodes[i] = self.nodes[i - 1].add(Vec3.new(0, 0.5, -1).scale(1.0 / 15.0));
+            const i_f: f32 = @floatFromInt(i);
+            const p = i_f / @as(f32, @floatFromInt(self.nodes.len));
+
+            // wave target
+            target = target.add(side.scale(@sin(self.wave + i_f * 0.5) * 0.5 * p * 5));
+
+            // approach target
+            // TODO: use delta time
+            self.nodes[i] = self.nodes[i].add(target.sub(self.nodes[i]).scale(0.25));
+
+            // max dist from parent
+            if (self.nodes[i].sub(prev).length() > maxdist) {
+                self.nodes[i] = prev.add((self.nodes[i].sub(prev)).norm().scale(maxdist));
+            }
+
+            target = self.nodes[i].add(step);
+            prev = self.nodes[i];
         }
     }
 
-    fn draw(self: Hair, si: Model.ShaderInfo, transform: Mat4) void {
+    fn draw(self: Hair, si: Model.ShaderInfo) void {
+        const dir = Vec2.new(self.forward.x(), self.forward.y());
         gl.glBindTexture(gl.GL_TEXTURE_2D, textures.findByName("white").id);
         gl.glUniform4f(si.color_loc, self.color[0], self.color[1], self.color[2], self.color[3]);
-        for (self.nodes) |node| {
-            const sphere_mat = transform.mul(Mat4.fromTranslate(node));
+        for (self.nodes, 0..) |node, i| {
+            const alpha = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(self.nodes.len));
+            const scale_xz = math.lerp(3.2, 1, alpha);
+            const scale_y = math.lerp(4, 2, alpha);
+            const scale = Vec3.new(scale_xz * self.squish.x(), scale_y * self.squish.y(), scale_xz * self.squish.z()).scale(5);
+            const sphere_mat = Mat4.fromTranslate(node)
+                .mul(Mat4.fromRotation(math.angleFromDir(dir) + 90, Vec3.new(0, 0, 1)))
+                .mul(Mat4.fromScale(scale));
             gl.glUniformMatrix4fv(si.model_loc, 1, gl.GL_FALSE, &sphere_mat.data[0]);
             primitives.drawSphere();
         }
@@ -251,6 +288,7 @@ fn setHairColor(self: *Player, color: [4]f32) void {
     for (self.skinned_model.model.gltf.data.materials.items) |*material| {
         if (std.mem.eql(u8, material.name, "Hair")) {
             material.metallic_roughness.base_color_factor = color;
+            material.metallic_roughness.metallic_factor = 1;
         }
     }
     self.hair.color = color;
@@ -392,13 +430,16 @@ fn lateUpdate(self: *Player) void {
         const z_up = Mat4.fromRotation(90, Vec3.new(1, 0, 0));
         var hair_matrix = Mat4.identity();
         const gltf_data = &self.skinned_model.model.gltf.data;
-        for (gltf_data.nodes.items) |node| {
+        for (gltf_data.nodes.items, 0..) |node, i| {
             if (std.mem.eql(u8, node.name, "Head")) {
-                hair_matrix = .{ .data = zgltf.getGlobalTransform(gltf_data, node) };
-                hair_matrix = z_up.mul(hair_matrix);
+                hair_matrix = self.skinned_model.global_transforms[i];
+                hair_matrix = self.actor.getTransform().mul(Mat4.fromScale(Vec3.new(3, 3, 3))).mul(z_up).mul(hair_matrix);
                 break;
             }
         }
+        const dir = math.dirFromAngle(self.actor.angle);
+        self.hair.forward = Vec3.new(-dir.x(), -dir.y(), 0);
+        self.hair.squish = self.model_scale;
         self.hair.update(hair_matrix);
     }
 }
@@ -677,7 +718,9 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const transform = actor.getTransform();
     self.skinned_model.draw(si, transform.mul(scale));
 
-    self.hair.draw(si, transform.mul(scale));
+    gl.glUniform1f(si.effects_loc, 0);
+    self.hair.draw(si);
+    gl.glUniform1f(si.effects_loc, 1);
 }
 
 // state machine functions

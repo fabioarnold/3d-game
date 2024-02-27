@@ -223,6 +223,7 @@ pub fn glGetUniformLocation(program: GLuint, name: [*c]const GLchar) GLint {
 pub extern fn glUseProgram(program: GLuint) void;
 pub extern fn glUniform1i(location: GLint, v0: GLint) void;
 pub extern fn glUniform1f(location: GLint, v0: GLfloat) void;
+pub extern fn glUniform3f(location: GLint, v0: GLfloat, v1: GLfloat, v2: GLfloat) void;
 pub extern fn glUniform4f(location: GLint, v0: GLfloat, v1: GLfloat, v2: GLfloat, v3: GLfloat) void;
 pub extern fn glUniform2fv(location: GLint, count: GLsizei, value: [*c]const GLfloat) void;
 pub extern fn glUniform4fv(location: GLint, count: GLsizei, value: [*c]const GLfloat) void;

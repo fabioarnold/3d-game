@@ -14,6 +14,7 @@ pub const ShaderInfo = struct {
     joints_loc: gl.GLint,
     blend_skin_loc: gl.GLint,
     color_loc: gl.GLint,
+    effects_loc: gl.GLint,
 };
 
 gltf: zgltf,
@@ -135,6 +136,7 @@ pub fn drawWithTransforms(self: Model, si: ShaderInfo, model_mat: Mat4, global_t
             gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
             const c = material.base_color_factor;
             gl.glUniform4f(si.color_loc, c[0], c[1], c[2], c[3]);
+            gl.glUniform1f(si.effects_loc, 1.0 - material.metallic_factor);
             for (primitive.attributes.items) |attribute| {
                 switch (attribute) {
                     .position => |accessor_index| self.bindVertexAttrib(accessor_index, 0),

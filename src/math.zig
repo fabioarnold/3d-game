@@ -119,6 +119,10 @@ fn calculateBarycentricCoordinates(
     w.* = 1 - u.* - v.*;
 }
 
+pub fn lerp(a: f32, b: f32, t: f32) f32 {
+    return a * (1 - t) + b * t;
+}
+
 pub fn clampedMap(val: f32, min: f32, max: f32, new_min: f32, new_max: f32) f32 {
     return std.math.clamp((val - min) / (max - min), 0, 1) * (new_max - new_min) + new_min;
 }

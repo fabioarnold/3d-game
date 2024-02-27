@@ -17,6 +17,7 @@ animation_index: usize = 0,
 animation_duration: f32 = 0,
 t: f32 = 0,
 rate: f32 = 1,
+global_transforms: [40]Mat4 = undefined,
 
 pub fn play(self: *SkinnedModel, animation_name: []const u8) void {
     for (self.model.gltf.data.animations.items, 0..) |animation, i| {
@@ -34,9 +35,12 @@ pub fn update(self: *SkinnedModel) void {
         // TODO: !looping
         self.t = @mod(self.t, self.animation_duration);
     }
+
+    self.setAnimationFrame(self.t);
 }
 
-pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
+// TODO: blended input
+fn setAnimationFrame(self: *SkinnedModel, t: f32) void {
     const data = &self.model.gltf.data;
     const nodes = data.nodes.items;
 
@@ -50,24 +54,26 @@ pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
         const sampler = animation.samplers.items[channel.sampler];
 
         switch (channel.target.property) {
-            .translation => local_transforms[channel.target.node].translation = self.sample(Vec3, sampler, self.t),
-            .rotation => local_transforms[channel.target.node].rotation = self.sample(Quat, sampler, self.t),
-            .scale => local_transforms[channel.target.node].scale = self.sample(Vec3, sampler, self.t),
+            .translation => local_transforms[channel.target.node].translation = self.sample(Vec3, sampler, t),
+            .rotation => local_transforms[channel.target.node].rotation = self.sample(Quat, sampler, t),
+            .scale => local_transforms[channel.target.node].scale = self.sample(Vec3, sampler, t),
             .weights => @panic("not implemented"),
         }
     }
 
-    var global_transforms: [40]Mat4 = undefined;
     for (0..nodes.len) |i| {
-        global_transforms[i] = local_transforms[i].toMat4();
+        self.global_transforms[i] = local_transforms[i].toMat4();
         var node = &nodes[i];
         while (node.parent) |parent_index| : (node = &nodes[parent_index]) {
             const parent_transform = local_transforms[parent_index].toMat4();
-            global_transforms[i] = parent_transform.mul(global_transforms[i]);
+            self.global_transforms[i] = parent_transform.mul(self.global_transforms[i]);
         }
     }
 
-    self.model.drawWithTransforms(si, model_mat, &global_transforms);
+}
+
+pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
+    self.model.drawWithTransforms(si, model_mat, &self.global_transforms);
 }
 
 const Transform = struct {

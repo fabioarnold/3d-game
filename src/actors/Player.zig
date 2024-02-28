@@ -134,7 +134,7 @@ const Hair = struct {
     fn update(self: *Hair, transform: Mat4) void {
         self.wave += time.delta * 4.0;
         const offset_per_node = self.forward.scale(forward_offset_per_node).add(Vec3.new(0, 0, -1));
-        const origin = transform.mulByVec4(Vec4.new(0.5, 11.0, -3, 1));
+        const origin = transform.mulByVec4(Vec4.new(0.5, 12.0, -3, 1));
         const step = offset_per_node.scale(5);
 
         // start hair offset
@@ -145,6 +145,7 @@ const Hair = struct {
         var prev = self.nodes[0];
         const maxdist = 0.8 * 5;
         const side = Quat.fromAxis(-90, Vec3.new(0, 0, 1)).rotateVec(self.forward);
+        var plane = math.Plane{ .normal = self.forward, .d = -self.forward.dot(self.nodes[0]) - 5 };
 
         for (1..self.nodes.len) |i| {
             const i_f: f32 = @floatFromInt(i);
@@ -156,6 +157,12 @@ const Hair = struct {
             // approach target
             // TODO: use delta time
             self.nodes[i] = self.nodes[i].add(target.sub(self.nodes[i]).scale(0.25));
+
+            // don't let hair cross the forward boundary
+            const dist = plane.distance(self.nodes[i]);
+            if (dist < 0) {
+                self.nodes[i] = self.nodes[i].sub(plane.normal.scale(dist));
+            }
 
             // max dist from parent
             if (self.nodes[i].sub(prev).length() > maxdist) {
@@ -433,7 +440,9 @@ fn lateUpdate(self: *Player) void {
         for (gltf_data.nodes.items, 0..) |node, i| {
             if (std.mem.eql(u8, node.name, "Head")) {
                 hair_matrix = self.skinned_model.global_transforms[i];
-                hair_matrix = self.actor.getTransform().mul(Mat4.fromScale(Vec3.new(3, 3, 3))).mul(z_up).mul(hair_matrix);
+                hair_matrix = self.actor.getTransform()
+                    .mul(Mat4.fromScale(self.model_scale.scale(3)))
+                    .mul(z_up).mul(hair_matrix);
                 break;
             }
         }

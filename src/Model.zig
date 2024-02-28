@@ -103,7 +103,7 @@ fn bindVertexAttrib(self: Model, accessor_index: usize, attrib_index: usize) voi
     gl.glVertexAttribPointer(attrib_index, size, typ, normalized, stride, pointer);
 }
 
-pub fn drawWithTransforms(self: Model, si: ShaderInfo, model_mat: Mat4, global_transforms: []const Mat4) void {
+pub fn drawWithTransforms(self: *Model, si: ShaderInfo, model_mat: Mat4, global_transforms: []const Mat4) void {
     const data = &self.gltf.data;
     const nodes = data.nodes.items;
 
@@ -166,7 +166,7 @@ pub fn drawWithTransforms(self: Model, si: ShaderInfo, model_mat: Mat4, global_t
     }
 }
 
-pub fn draw(self: Model, si: ShaderInfo, model_mat: Mat4) void {
+pub fn draw(self: *Model, si: ShaderInfo, model_mat: Mat4) void {
     const nodes = self.gltf.data.nodes.items;
 
     var local_transforms: [32]Mat4 = undefined;

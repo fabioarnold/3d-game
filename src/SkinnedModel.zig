@@ -45,7 +45,7 @@ fn setAnimationFrame(self: *SkinnedModel, t: f32) void {
     const nodes = data.nodes.items;
 
     var local_transforms: [40]Transform = undefined;
-    for (nodes, 0..) |node, i| {
+    for (nodes, 0..) |*node, i| {
         local_transforms[i] = Transform.fromNode(node);
     }
 
@@ -69,10 +69,9 @@ fn setAnimationFrame(self: *SkinnedModel, t: f32) void {
             self.global_transforms[i] = parent_transform.mul(self.global_transforms[i]);
         }
     }
-
 }
 
-pub fn draw(self: SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
+pub fn draw(self: *SkinnedModel, si: Model.ShaderInfo, model_mat: Mat4) void {
     self.model.drawWithTransforms(si, model_mat, &self.global_transforms);
 }
 
@@ -81,7 +80,7 @@ const Transform = struct {
     scale: Vec3,
     translation: Vec3,
 
-    fn fromNode(node: zgltf.Node) Transform {
+    fn fromNode(node: *zgltf.Node) Transform {
         return .{
             // glb data is x,y,z,w instead of w,x,y,z
             .rotation = Quat.new(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]),
@@ -103,7 +102,7 @@ const Transform = struct {
     }
 };
 
-fn sample(self: SkinnedModel, comptime T: type, sampler: zgltf.AnimationSampler, t: f32) T {
+fn sample(self: *SkinnedModel, comptime T: type, sampler: zgltf.AnimationSampler, t: f32) T {
     const samples = self.model.getFloatBuffer(self.model.gltf.data.accessors.items[sampler.input]);
     const data = self.model.getFloatBuffer(self.model.gltf.data.accessors.items[sampler.output]);
 

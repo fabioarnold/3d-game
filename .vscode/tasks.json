@@ -10,10 +10,7 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "problemMatcher": {
-                "base": "$gcc",
-                "fileLocation": "autoDetect"
-            },
+            "problemMatcher": "$gcc",
             "presentation": {
                 "echo": true,
                 "reveal": "silent",

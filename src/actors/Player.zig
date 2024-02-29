@@ -102,13 +102,15 @@ fn StateMachine(comptime I: type, S: type) type {
         state: S,
         function_table: [@typeInfo(S).Enum.fields.len]Entry = undefined,
 
-        fn initState(self: *Self, s: S, updateFn: *const F, enterFn: *const F, exitFn: *const F) void {
+        fn initState(self: *Self, s: S, updateFn: *const F, enterFn: *const F, exitFn: ?*const F) void {
             self.function_table[@intFromEnum(s)] = .{
                 .updateFn = updateFn,
                 .enterFn = enterFn,
-                .exitFn = exitFn,
+                .exitFn = if (exitFn) |f| f else noop,
             };
         }
+
+        fn noop(_: *I) void {}
 
         fn setState(self: *Self, s: S) void {
             self.function_table[@intFromEnum(self.state)].exitFn(self.instance);
@@ -224,6 +226,11 @@ state_machine: StateMachine(Player, State),
 t_coyote: f32 = 0,
 coyote_z: f32 = 0,
 
+draw_model: bool = true,
+draw_hair: bool = true,
+draw_orbs: bool = false,
+draw_orbs_ease: f32 = 0,
+
 last_dash_hair_color: [4]f32 = undefined,
 
 // normal state
@@ -281,6 +288,8 @@ pub fn init(actor: *Actor) void {
     self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
     self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
     self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit);
+    self.state_machine.initState(.respawn, stRespawnUpdate, stRespawnEnter, stRespawnExit);
+    self.state_machine.initState(.dead, stDeadUpdate, stDeadEnter, null);
 
     self.setHairColor(color_normal);
 }
@@ -723,13 +732,17 @@ fn ceilingCheck(self: *Player) ?Vec3 {
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const self = @fieldParentPtr(Player, "actor", actor);
-    const scale = Mat4.fromScale(self.model_scale.scale(15));
-    const transform = actor.getTransform();
-    self.skinned_model.draw(si, transform.mul(scale));
+    if (self.draw_model) {
+        const scale = Mat4.fromScale(self.model_scale.scale(15));
+        const transform = actor.getTransform();
+        self.skinned_model.draw(si, transform.mul(scale));
+    }
 
-    gl.glUniform1f(si.effects_loc, 0);
-    self.hair.draw(si);
-    gl.glUniform1f(si.effects_loc, 1);
+    if (self.draw_hair) {
+        gl.glUniform1f(si.effects_loc, 0);
+        self.hair.draw(si);
+        gl.glUniform1f(si.effects_loc, 1);
+    }
 }
 
 // state machine functions
@@ -1245,4 +1258,56 @@ fn stClimbingUpdate(self: *Player) void {
         self.actor.position = self.climb_corner_from;
         self.target_facing = self.climb_corner_facing_from;
     }
+}
+
+fn stRespawnEnter(self: *Player) void {
+    self.draw_model = false;
+    self.draw_hair = false;
+    self.draw_orbs = true;
+    self.draw_orbs_ease = 1;
+    self.point_shadow_alpha = 0;
+    // audio.play(sfx.sfx_revive, position);
+}
+
+fn stRespawnUpdate(self: *Player) void {
+    self.draw_orbs_ease -= time.delta * 2;
+    if (self.draw_orbs_ease <= 0) {
+        self.state_machine.setState(.normal);
+    }
+}
+
+fn stRespawnExit(self: *Player) void {
+    self.point_shadow_alpha = 1;
+    self.draw_model = true;
+    self.draw_hair = true;
+    self.draw_orbs = false;
+}
+
+fn stDeadEnter(self: *Player) void {
+    self.draw_model = false;
+    self.draw_hair = false;
+    self.draw_orbs = true;
+    self.draw_orbs_ease = 0;
+    self.point_shadow_alpha = 0;
+    // audio.play(sfx.sfx_death, position);
+}
+
+fn stDeadUpdate(self: *Player) void {
+    if (self.draw_orbs_ease < 1) {
+        self.draw_orbs_ease += time.delta * 2.0;
+    } else {
+        // TODO: remove and use game transition
+        self.state_machine.setState(.respawn);
+        self.actor.position = Vec3.new(0, -400, 300);
+    }
+
+    // TODO
+    // if (!game.is_mid_transition and self.draw_orbs_ease > 0.3) {
+    //     const entry = World.Entry{ .reason = .respawned };
+    //     game.goto(Transition{
+    //         .mode = transition.modes.replace,
+    //         .scene = World(entry),
+    //         .to_black = AngledWipe(),
+    //     });
+    // }
 }

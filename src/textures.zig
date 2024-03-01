@@ -13,7 +13,8 @@ var textures: [@typeInfo(assets.textures).Struct.decls.len]Texture = undefined;
 pub fn load() void {
     inline for (@typeInfo(assets.textures).Struct.decls, 0..) |decl, i| {
         const data = @field(assets.textures, decl.name);
-        textures[i].id = gl.jsLoadTexturePNG(data.ptr, data.len, &textures[i].width, &textures[i].height);
+        const mime = "image/webp";
+        textures[i].id = gl.jsLoadTextureIMG(data.ptr, data.len, mime.ptr, mime.len, &textures[i].width, &textures[i].height);
     }
 }
 

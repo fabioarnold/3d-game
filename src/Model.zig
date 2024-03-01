@@ -41,8 +41,9 @@ pub fn load(self: *Model, allocator: std.mem.Allocator, data: []align(4) const u
     gl.glGenTextures(@intCast(self.textures.len), self.textures.ptr);
     for (self.gltf.data.textures.items, 0..) |texture, i| {
         const image = self.gltf.data.images.items[texture.source.?];
-        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
-        self.textures[i] = gl.jsLoadTexturePNG(image.data.?.ptr, image.data.?.len, null, null);
+        const mime = "image/png";
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, mime));
+        self.textures[i] = gl.jsLoadTextureIMG(image.data.?.ptr, image.data.?.len, mime.ptr, mime.len, null, null);
         // const sampler = self.gltf.data.samplers.items[texture.sampler.?]; // TODO set filter, wrap
     }
 }

@@ -357,7 +357,9 @@ pub fn draw(self: World, camera: Camera) void {
         gl.glDisable(gl.GL_DEPTH_TEST);
         gl.glDepthMask(gl.GL_FALSE);
         gl.glCullFace(gl.GL_FRONT);
-        const mvp = view_projection.mul(Mat4.fromTranslate(camera.position));
+        const mvp = view_projection
+            .mul(Mat4.fromTranslate(camera.position))
+            .mul(Mat4.fromScale(Vec3.new(1, 1, 0.5)));
         self.skybox.draw(textured_unlit_mvp_loc, mvp, 300);
         gl.glCullFace(gl.GL_BACK);
         gl.glDepthMask(gl.GL_TRUE);

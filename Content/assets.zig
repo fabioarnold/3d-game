@@ -48,6 +48,30 @@ pub const textures = struct {
     pub var skybox_city = @embedFile("Textures/Skyboxes/city.webp");
 };
 
+pub const sprites = struct {
+    pub var bubble = @embedFile("Sprites/bubble.webp");
+    pub var circle = @embedFile("Sprites/circle.webp");
+    pub var dust_0 = @embedFile("Sprites/dust_0.webp");
+    pub var dust_1 = @embedFile("Sprites/dust_1.webp");
+    pub var dust_2 = @embedFile("Sprites/dust_2.webp");
+    pub var dust_3 = @embedFile("Sprites/dust_3.webp");
+    pub var dust_4 = @embedFile("Sprites/dust_4.webp");
+    pub var gradient = @embedFile("Sprites/gradient.webp");
+    pub var icon_skull = @embedFile("Sprites/icon_skull.webp");
+    pub var icon_stopwatch = @embedFile("Sprites/icon_stopwatch.webp");
+    pub var icon_strawberry = @embedFile("Sprites/icon_strawberry.webp");
+    pub var interact = @embedFile("Sprites/interact.webp");
+    pub var particle = @embedFile("Sprites/particle-star.webp");
+    pub var ring = @embedFile("Sprites/ring.webp");
+    pub var shard_0 = @embedFile("Sprites/shard_0.webp");
+    pub var shard_1 = @embedFile("Sprites/shard_1.webp");
+    pub var shard_2 = @embedFile("Sprites/shard_2.webp");
+    pub var splash = @embedFile("Sprites/splash.webp");
+    pub var wood_shard_0 = @embedFile("Sprites/wood_shard_0.webp");
+    pub var wood_shard_1 = @embedFile("Sprites/wood_shard_1.webp");
+    pub var wood_shard_2 = @embedFile("Sprites/wood_shard_2.webp");
+};
+
 pub const models = struct {
     pub var antenna = @embedFile("Models/antenna.glb");
     pub var badeline = @embedFile("Models/badeline.glb");

@@ -19,7 +19,7 @@ const images = [5][]const u8{ "dust_0", "dust_1", "dust_2", "dust_3", "dust_4" }
 actor: Actor,
 velocity: Vec3 = Vec3.zero(),
 image: textures.Texture,
-color: [4]f32 = [_]f32{ 0.7, 0.75, 0.8, 1 },
+color: [4]f32,
 percent: f32 = 0,
 duration: f32,
 
@@ -28,14 +28,20 @@ pub fn init(actor: *Actor) void {
     self.* = Dust{
         .actor = actor.*,
         .image = textures.findByName(images[world.rng.uintLessThan(usize, images.len)]),
+        .color = undefined,
         .duration = 0.5 + 0.5 * world.rng.float(f32),
     };
 }
 
-pub fn create(allocator: std.mem.Allocator, position: Vec3, velocity: Vec3) !*Actor {
+const CreateOptions = struct {
+    color: [4]f32 = [4]f32{ 0.7, 0.75, 0.8, 1 },
+};
+
+pub fn create(allocator: std.mem.Allocator, position: Vec3, velocity: Vec3, options: CreateOptions) !*Actor {
     const dust = try World.Actor.create(Dust, allocator);
     dust.actor.position = position;
     dust.velocity = velocity;
+    dust.color = options.color;
     // UpdateOffScreen = true;
     return &dust.actor;
 }

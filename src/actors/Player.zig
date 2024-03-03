@@ -423,7 +423,7 @@ fn lateUpdate(self: *Player) void {
                     const dir3 = Vec3.new(dir.x(), dir.y(), 0);
                     const pos = self.actor.position.add(dir3.scale(4 * 5));
                     const vel = dir3.scale(50 * 5);
-                    const dust_actor = Dust.create(world.allocator, pos, vel) catch unreachable;
+                    const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
                     world.add(dust_actor);
                 }
             }
@@ -534,17 +534,21 @@ fn skidJump(self: *Player) void {
     self.t_coyote = 0;
 
     const vel_xy = self.target_facing.scale(skid_jump_xy_speed);
-    self.velocity.data[0] = vel_xy.x();
-    self.velocity.data[1] = vel_xy.y();
+    self.velocity.xMut().* = vel_xy.x();
+    self.velocity.yMut().* = vel_xy.y();
 
     self.addPlatformVelocity(false);
     self.cancelGroundSnap();
 
-    // for (int i = 0; i < 16; i ++)
-    // {
-    // 	var dir = new Vec3(Calc.AngleToVector((i / 16f) * MathF.Tau), 0);
-    // 	World.Request<Dust>().Init(Position + dir * 8, new Vec3(velocity.XY() * 0.5f, 10) - dir * 50, 0x666666);
-    // }
+    for (0..16) |i| {
+        const angle: f32 = 360.0 * @as(f32, @floatFromInt(i)) / 16.0;
+        const dir = math.dirFromAngle(angle);
+        const dir3 = Vec3.new(dir.x(), dir.y(), 0);
+        const pos = self.actor.position.add(dir3.scale(8 * 5));
+        const vel = Vec3.new(vel_xy.x() * 0.5, vel_xy.y() * 0.5, 10 * 5).sub(dir3.scale(50 * 5));
+        const dust_actor = Dust.create(world.allocator, pos, vel, .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        world.add(dust_actor);
+    }
 
     self.model_scale = Vec3.new(0.6, 0.6, 1.4);
     // Audio.Play(Sfx.sfx_jump, Position);
@@ -876,7 +880,28 @@ fn stNormalUpdate(self: *Player) void {
         self.velocity = Vec3.new(vel_xy.x(), vel_xy.y(), self.velocity.z());
     }
 
-    // TODO: footsteps
+    // footstep sounds
+    {
+        const vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+        if (self.on_ground and vel_xy.length() > 10) {
+            self.t_footstep -= time.delta * self.skinned_model.rate;
+            if (self.t_footstep <= 0) {
+                self.t_footstep = footstep_interval;
+                // audio.play(.sfx_footstep_general, self.actor.position);
+            }
+
+            if (time.onInterval(0.05)) {
+                const x = world.rng.float(f32) * 6 - 3;
+                const y = world.rng.float(f32) * 6 - 3;
+                const pos = self.actor.position.add(Vec3.new(x, y, 0));
+                const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
+                const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+                world.add(dust_actor);
+            }
+        } else {
+            self.t_footstep = footstep_interval;
+        }
+    }
 
     // start climbing
     if (controls.climb.down and self.t_climb_cooldown <= 0 and self.tryClimb()) {
@@ -1023,8 +1048,12 @@ fn stSkiddingEnter(self: *Player) void {
     self.skinned_model.play("Skid");
     // Audio.Play(Sfx.sfx_skid, Position);
 
-    // for (int i = 0; i < 5; i ++)
-    //  World.Request<Dust>().Init(Position + new Vec3(targetFacing, 0) * i, new Vec3(-targetFacing, 0.0f).Normalized() * 50, 0x666666);
+    for (0..5) |i| {
+        const dir = Vec3.new(self.target_facing.x(), self.target_facing.y(), 0);
+        const pos = self.actor.position.add(dir.scale(@floatFromInt(i * 5)));
+        const dust_actor = Dust.create(world.allocator, pos, dir.scale(-50 * 5), .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        world.add(dust_actor);
+    }
 }
 
 fn stSkiddingExit(self: *Player) void {
@@ -1152,13 +1181,12 @@ fn stClimbingUpdate(self: *Player) void {
 
         if (@abs(input_translated.x()) < 0.25 and input_translated.y() >= 0) {
             if (input_translated.y() > 0 and !self.on_ground) {
-                // TODO
-                // if (time.on_interval(0.05f))
-                // {
-                // 	var at = position + wall_up * 5 + new vec3(facing, 0) * 2;
-                // 	var vel = t_platform_velocity_storage > 0 ? platform_velocity : vec3.zero;
-                // 	world.request<dust>().init(at, vel);
-                // }
+                if (time.onInterval(0.05)) {
+                    const pos = self.actor.position.add(wall_up.scale(5).add(forward.scale(2)).scale(5));
+                    const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
+                    const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+                    world.add(dust_actor);
+                }
                 wall_slide_sound_enabled = true;
             }
 

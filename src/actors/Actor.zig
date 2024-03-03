@@ -15,22 +15,34 @@ position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
 destroying: bool = false,
 
+derived: *anyopaque,
+deinitFn: *const fn (*Actor, Allocator) void,
 updateFn: *const fn (*Actor) void,
 drawFn: *const fn (*Actor, ShaderInfo) void,
 
 cast_point_shadow: ?CastPointShadow = null,
 
-pub fn create(comptime T: type, allocator: Allocator) !*T {
-    var t = try allocator.create(T);
-    t.actor = .{
-        .updateFn = if (@hasDecl(T, "update")) &@field(T, "update") else &updateNoOp,
-        .drawFn = &T.draw,
+pub fn create(comptime Derived: type, allocator: Allocator) !*Derived {
+    var derived = try allocator.create(Derived);
+    derived.actor = .{
+        .derived = derived,
+        .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &updateNoOp,
+        .drawFn = &Derived.draw,
+        .deinitFn = &struct {
+            fn deinit(self: *Actor, ally: Allocator) void {
+                ally.destroy(@as(*Derived, @alignCast(@ptrCast(self.derived))));
+            }
+        }.deinit,
     };
-    if (@hasDecl(T, "init")) {
-        const initFn = &@field(T, "init");
-        initFn(&t.actor);
+    if (@hasDecl(Derived, "init")) {
+        const initFn = &@field(Derived, "init");
+        initFn(&derived.actor);
     }
-    return t;
+    return derived;
+}
+
+pub fn deinit(self: *Actor, allocator: Allocator) void {
+    self.deinitFn(self, allocator);
 }
 
 pub fn getTransform(self: Actor) Mat4 {

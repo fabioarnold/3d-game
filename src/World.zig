@@ -114,6 +114,8 @@ camera: Camera = .{},
 allocator: std.mem.Allocator = undefined,
 rng: std.rand.Random = undefined,
 actors: std.ArrayList(*Actor) = undefined,
+adding: std.ArrayList(*Actor) = undefined,
+destroying: std.ArrayList(*Actor) = undefined,
 solids: std.ArrayList(*Solid) = undefined,
 sprites: std.ArrayList(Sprite) = undefined,
 player: *Player = undefined,
@@ -195,6 +197,8 @@ pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
     prng = std.rand.DefaultPrng.init(0);
     self.rng = prng.random();
     self.actors = std.ArrayList(*Actor).init(allocator);
+    self.adding = std.ArrayList(*Actor).init(allocator);
+    self.destroying = std.ArrayList(*Actor).init(allocator);
     self.solids = std.ArrayList(*Solid).init(allocator);
     self.sprites = std.ArrayList(Sprite).init(allocator);
     // self.clear()
@@ -202,13 +206,27 @@ pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
 }
 
 pub fn add(self: *World, actor: *Actor) void {
-    // TODO: we crash while we're iterating in fn update() and the actor list needs to be reallocated
-    self.actors.append(actor) catch unreachable;
+    self.adding.append(actor) catch unreachable;
 }
 
 pub fn destroy(self: *World, actor: *Actor) void {
-    _ = self;
     actor.destroying = true;
+    self.destroying.append(actor) catch unreachable;
+}
+
+fn resolveChanges(self: *World) void {
+    for (self.adding.items) |actor| {
+        self.actors.append(actor) catch unreachable;
+    }
+    self.adding.clearRetainingCapacity();
+
+    for (self.destroying.items) |actor| {
+        if (std.mem.indexOfScalar(*Actor, self.actors.items, actor)) |i| {
+            _ = self.actors.swapRemove(i);
+        }
+        actor.deinit(self.allocator);
+    }
+    self.destroying.clearRetainingCapacity();
 }
 
 const RayHit = struct {
@@ -378,6 +396,7 @@ pub fn solidWallCheckClosestToNormal(self: World, point: Vec3, radius: f32, norm
 }
 
 pub fn update(self: *World) void {
+    self.resolveChanges();
     for (self.actors.items) |actor| {
         actor.update();
     }

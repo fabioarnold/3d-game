@@ -286,6 +286,8 @@ pub fn init(actor: *Actor) void {
     };
     self.skinned_model.play("Idle");
 
+    actor.cast_point_shadow = .{};
+
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
     self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);

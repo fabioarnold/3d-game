@@ -11,14 +11,18 @@ const time = @import("../time.zig");
 const controls = @import("../controls.zig");
 const gl = @import("../web/webgl.zig");
 const primitives = @import("../primitives.zig");
+const Sprite = @import("../Sprite.zig");
 const textures = @import("../textures.zig");
+const Game = @import("../Game.zig");
 const World = @import("../World.zig");
-const Actor = World.Actor;
+const Actor = @import("Actor.zig");
+const Dust = @import("Dust.zig");
 const models = @import("../models.zig");
 const Model = @import("../Model.zig");
 const SkinnedModel = @import("../SkinnedModel.zig");
 const logger = std.log.scoped(.player);
 
+const game = &Game.game;
 const world = &World.world;
 
 const Player = @This();
@@ -206,7 +210,6 @@ dead: bool = false,
 model_scale: Vec3 = Vec3.one(),
 skinned_model: SkinnedModel,
 hair: Hair = Hair{},
-point_shadow_alpha: f32 = 1,
 
 velocity: Vec3 = Vec3.zero(),
 prev_velocity: Vec3 = Vec3.zero(),
@@ -408,7 +411,20 @@ fn lateUpdate(self: *Player) void {
         if (!prev_on_ground and self.on_ground) {
             const t = math.clampedMap(self.prev_velocity.z(), 0, max_fall, 0, 1);
             self.model_scale = Vec3.lerp(Vec3.one(), Vec3.new(1.4, 1.4, 0.6), t);
-            // TODO: landing
+            // stateMachine.CallEvent(Events.Land); TODO: figure out what this is doing
+
+            if (!game.isMidTransition() and !self.inBubble()) {
+                // audio.play(.sfx_land, self.actor.position);
+                for (0..16) |i| {
+                    const angle: f32 = 360.0 * @as(f32, @floatFromInt(i)) / 16.0;
+                    const dir = math.dirFromAngle(angle);
+                    const dir3 = Vec3.new(dir.x(), dir.y(), 0);
+                    const pos = self.actor.position.add(dir3.scale(4 * 5));
+                    const vel = dir3.scale(50 * 5);
+                    const dust_actor = Dust.create(world.allocator, pos, vel) catch unreachable;
+                    world.add(dust_actor);
+                }
+            }
         }
     }
 
@@ -732,6 +748,11 @@ fn ceilingCheck(self: *Player) ?Vec3 {
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const self = @fieldParentPtr(Player, "actor", actor);
+    // debug: draw camera origin pos
+    // if (world.debug_draw) {
+    //     world.drawSprite(Sprite.createBillboard(world.camera, self.camera_origin_pos, textures.findByName("circle"), 5, .{ 1, 0, 0, 1 }));
+    // }
+
     if (self.draw_model) {
         const scale = Mat4.fromScale(self.model_scale.scale(15));
         const transform = actor.getTransform();
@@ -1265,7 +1286,7 @@ fn stRespawnEnter(self: *Player) void {
     self.draw_hair = false;
     self.draw_orbs = true;
     self.draw_orbs_ease = 1;
-    self.point_shadow_alpha = 0;
+    self.actor.cast_point_shadow.?.alpha = 0;
     // audio.play(sfx.sfx_revive, position);
 }
 
@@ -1277,7 +1298,7 @@ fn stRespawnUpdate(self: *Player) void {
 }
 
 fn stRespawnExit(self: *Player) void {
-    self.point_shadow_alpha = 1;
+    self.actor.cast_point_shadow.?.alpha = 1;
     self.draw_model = true;
     self.draw_hair = true;
     self.draw_orbs = false;
@@ -1288,7 +1309,7 @@ fn stDeadEnter(self: *Player) void {
     self.draw_hair = false;
     self.draw_orbs = true;
     self.draw_orbs_ease = 0;
-    self.point_shadow_alpha = 0;
+    self.actor.cast_point_shadow.?.alpha = 0;
     // audio.play(sfx.sfx_death, position);
 }
 
@@ -1302,7 +1323,7 @@ fn stDeadUpdate(self: *Player) void {
     }
 
     // TODO
-    // if (!game.is_mid_transition and self.draw_orbs_ease > 0.3) {
+    // if (!game.isMidTransition() and self.draw_orbs_ease > 0.3) {
     //     const entry = World.Entry{ .reason = .respawned };
     //     game.goto(Transition{
     //         .mode = transition.modes.replace,

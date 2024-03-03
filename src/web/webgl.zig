@@ -181,6 +181,7 @@ pub extern fn glTexSubImage2D(target: GLenum, level: GLint, xoffset: GLint, yoff
 pub extern fn glGenTextures(n: GLsizei, textures: [*c]GLuint) void;
 pub extern fn glDeleteTextures(n: GLsizei, textures: [*c]const GLuint) void;
 pub extern fn glBindTexture(target: GLenum, texture: GLuint) void;
+pub extern fn glBlendFunc(sfactor: GLenum, dfactor: GLenum) void;
 pub extern fn glTexParameteri(target: GLenum, pname: GLenum, param: GLint) void;
 pub extern fn jsLoadTextureIMG(data_ptr: [*]const u8, data_len: usize, mime_ptr: [*]const u8, mime_len: usize, ?*u16, ?*u16) GLuint;
 pub extern fn glGenerateMipmap(target: GLenum) void;

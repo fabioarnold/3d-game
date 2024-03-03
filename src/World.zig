@@ -7,6 +7,8 @@ const Mat4 = za.Mat4;
 const math = @import("math.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
+const Sprite = @import("Sprite.zig");
+const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
 const Model = @import("Model.zig");
 const ShaderInfo = Model.ShaderInfo;
@@ -109,8 +111,11 @@ pub const death_plane = -100 * 5;
 
 camera: Camera = .{},
 
+allocator: std.mem.Allocator = undefined,
+rng: std.rand.Random = undefined,
 actors: std.ArrayList(*Actor) = undefined,
 solids: std.ArrayList(*Solid) = undefined,
+sprites: std.ArrayList(Sprite) = undefined,
 player: *Player = undefined,
 skybox: Skybox = undefined,
 
@@ -124,6 +129,9 @@ var textured_skinned_joints_loc: gl.GLint = undefined;
 var textured_skinned_blend_skin_loc: gl.GLint = undefined;
 var textured_skinned_color_loc: gl.GLint = undefined;
 var textured_skinned_effects_loc: gl.GLint = undefined;
+
+var sprite_shader: gl.GLuint = undefined;
+var sprite_viewprojection_loc: gl.GLint = undefined;
 
 fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []const u8) gl.GLuint {
     const vert_shader = gl.glInitShader(vert_src.ptr, vert_src.len, gl.GL_VERTEX_SHADER);
@@ -168,13 +176,39 @@ pub fn loadShaders() void {
     const sun = Vec3.new(0, -0.7, -1.0).norm();
     gl.glUniform3f(textured_skinned_sun_loc, sun.x(), sun.y(), sun.z());
     gl.glUniform1f(textured_skinned_effects_loc, 1);
+
+    sprite_shader = loadShader(
+        @embedFile("shaders/sprite.vert"),
+        @embedFile("shaders/sprite.frag"),
+        &.{ "a_position", "a_texcoord", "a_color" },
+    );
+    gl.glUseProgram(sprite_shader);
+    sprite_viewprojection_loc = gl.glGetUniformLocation(sprite_shader, "u_viewprojection");
+    const sprite_texture_loc = gl.glGetUniformLocation(sprite_shader, "u_texture");
+    gl.glUniform1i(sprite_texture_loc, 0);
 }
 
+var prng: std.rand.DefaultPrng = undefined;
+
 pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
+    self.allocator = allocator;
+    prng = std.rand.DefaultPrng.init(0);
+    self.rng = prng.random();
     self.actors = std.ArrayList(*Actor).init(allocator);
     self.solids = std.ArrayList(*Solid).init(allocator);
+    self.sprites = std.ArrayList(Sprite).init(allocator);
     // self.clear()
     try Map.load(allocator, self, map_name);
+}
+
+pub fn add(self: *World, actor: *Actor) void {
+    // TODO: we crash while we're iterating in fn update() and the actor list needs to be reallocated
+    self.actors.append(actor) catch unreachable;
+}
+
+pub fn destroy(self: *World, actor: *Actor) void {
+    _ = self;
+    actor.destroying = true;
 }
 
 const RayHit = struct {
@@ -349,9 +383,19 @@ pub fn update(self: *World) void {
     }
 }
 
-pub fn draw(self: World, camera: Camera) void {
+pub fn drawSprite(self: *World, sprite: Sprite) void {
+    self.sprites.append(sprite) catch unreachable;
+}
+
+pub fn drawSprites(self: *World) void {
+    SpriteRenderer.draw(self.sprites.items) catch unreachable;
+    self.sprites.clearRetainingCapacity();
+}
+
+pub fn draw(self: *World, camera: Camera) void {
     const view_projection = camera.projection().mul(camera.view());
 
+    // skybox
     {
         gl.glUseProgram(textured_unlit_shader);
         gl.glDisable(gl.GL_DEPTH_TEST);
@@ -366,6 +410,7 @@ pub fn draw(self: World, camera: Camera) void {
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
 
+    // actors
     gl.glUseProgram(textured_skinned_shader);
     gl.glUniformMatrix4fv(textured_skinned_viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     const si = ShaderInfo{
@@ -378,4 +423,9 @@ pub fn draw(self: World, camera: Camera) void {
     for (self.actors.items) |actor| {
         actor.draw(si);
     }
+
+    // sprites
+    gl.glUseProgram(sprite_shader);
+    gl.glUniformMatrix4fv(sprite_viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
+    self.drawSprites();
 }

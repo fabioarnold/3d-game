@@ -7,10 +7,18 @@ const ShaderInfo = @import("../Model.zig").ShaderInfo;
 
 const Actor = @This();
 
+const CastPointShadow = struct {
+    alpha: f32 = 0,
+};
+
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
+destroying: bool = false,
+
 updateFn: *const fn (*Actor) void,
 drawFn: *const fn (*Actor, ShaderInfo) void,
+
+cast_point_shadow: ?CastPointShadow = null,
 
 pub fn create(comptime T: type, allocator: Allocator) !*T {
     var t = try allocator.create(T);

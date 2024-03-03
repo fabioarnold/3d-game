@@ -10,6 +10,7 @@ const time = @import("time.zig");
 const controls = @import("controls.zig");
 const primitives = @import("primitives.zig");
 const textures = @import("textures.zig");
+const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
 const Camera = @import("Camera.zig");
 const World = @import("World.zig");
@@ -44,9 +45,12 @@ export fn onImagesLoaded() void {
 
     gl.glEnable(gl.GL_DEPTH_TEST);
     gl.glEnable(gl.GL_CULL_FACE);
+    gl.glEnable(gl.GL_BLEND);
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
 
     textures.updateParameters();
 
+    SpriteRenderer.init(allocator);
     World.loadShaders();
     world.load(allocator, "1") catch unreachable;
 }

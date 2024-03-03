@@ -13,7 +13,7 @@ const Camera = @This();
 position: Vec3 = Vec3.zero(),
 angles: Vec3 = Vec3.zero(), // yaw, pitch, roll
 field_of_view: f32 = 60,
-aspect_ratio: f32 = 16.0/9.0,
+aspect_ratio: f32 = 16.0 / 9.0,
 near_plane: f32 = 1,
 far_plane: f32 = 10000,
 
@@ -32,6 +32,16 @@ pub fn view(self: Camera) Mat4 {
     const z_up = Quat.fromAxis(90, Vec3.new(1, 0, 0));
     const v = z_up.mul(self.orientation()).toMat4().translate(self.position);
     return v.inv();
+}
+
+pub fn left(self: Camera) Vec3 {
+    return Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1)).rotateVec(Vec3.new(-1, 0, 0));
+}
+
+pub fn up(self: Camera) Vec3 {
+    const x = Quat.fromAxis(self.angles.x(), Vec3.new(1, 0, 0));
+    const y = Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1));
+    return y.mul(x).rotateVec(Vec3.new(0, 0, 1));
 }
 
 pub fn handleKeys(self: *Camera) void {

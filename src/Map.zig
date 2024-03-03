@@ -40,9 +40,6 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     try world.solids.append(solid);
     try world.actors.append(&solid.actor);
 
-    var prng = std.rand.DefaultPrng.init(0);
-    const r = prng.random();
-
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
     for (quake_map.entities.items) |entity| {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
@@ -50,8 +47,8 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             const floating_decoration = try World.Actor.create(World.FloatingDecoration, allocator);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
-            floating_decoration.rate = 0.25 * (1.0 + 2.0 * r.float(f32));
-            floating_decoration.offset = r.float(f32) * std.math.tau;
+            floating_decoration.rate = 0.25 * (1.0 + 2.0 * world.rng.float(f32));
+            floating_decoration.offset = world.rng.float(f32) * std.math.tau;
             try world.actors.append(&floating_decoration.actor);
         } else {
             try loadActor(allocator, world, entity);

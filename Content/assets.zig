@@ -3,6 +3,7 @@ pub const maps = struct {
 };
 
 pub const textures = struct {
+    // textures
     pub var TB_empty = @embedFile("Textures/TB_empty.webp");
     pub var big_decals_1 = @embedFile("Textures/big_decals_1.webp");
     pub var casset_block_1 = @embedFile("Textures/casset_block_1.webp");
@@ -45,10 +46,10 @@ pub const textures = struct {
     pub var wood_4 = @embedFile("Textures/wood_4.webp");
     pub var wood_fragile = @embedFile("Textures/wood_fragile.webp");
 
+    // skyboxes
     pub var skybox_city = @embedFile("Textures/Skyboxes/city.webp");
-};
 
-pub const sprites = struct {
+    // sprites
     pub var bubble = @embedFile("Sprites/bubble.webp");
     pub var circle = @embedFile("Sprites/circle.webp");
     pub var dust_0 = @embedFile("Sprites/dust_0.webp");

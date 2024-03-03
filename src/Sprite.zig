@@ -38,9 +38,9 @@ pub fn createShadowSprite(world: *World, position: Vec3, alpha: f32) ?Sprite {
     return null;
 }
 
-pub fn createBillboard(camera: *Camera, at: Vec3, texture: Texture, size: f32, color: [4]f32) Sprite {
-    const left = camera.left().scale(size);
-    const up = camera.up().scale(size);
+pub fn createBillboard(world: *World, at: Vec3, texture: Texture, size: f32, color: [4]f32) Sprite {
+    const left = world.camera.left().scale(size);
+    const up = world.camera.up().scale(size);
     return .{
         .texture = texture,
         .v0 = at.add(left).add(up),

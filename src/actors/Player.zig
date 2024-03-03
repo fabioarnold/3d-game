@@ -7,6 +7,7 @@ const Quat = za.Quat;
 const Mat4 = za.Mat4;
 const zgltf = @import("zgltf");
 const math = @import("../math.zig");
+const easing = @import("../easing.zig");
 const time = @import("../time.zig");
 const controls = @import("../controls.zig");
 const gl = @import("../web/webgl.zig");
@@ -770,6 +771,35 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
         self.hair.draw(si);
         gl.glUniform1f(si.effects_loc, 1);
     }
+
+    const circle_tex = textures.findByName("circle");
+    const color_white: [4]f32 = .{ 1, 1, 1, 1 };
+    // const color_black: [4]f32 = .{ 0, 0, 0, 1 };
+    if (self.draw_orbs and self.draw_orbs_ease > 0) {
+        const ease = self.draw_orbs_ease;
+        const col = if (@mod(@floor(ease * 10), 2) == 0) self.hair.color else color_white;
+        const s = if (ease < 0.5) (0.5 + ease) else (easing.outCubic(1 - (ease - 0.5) * 2));
+        for (0..8) |i| {
+            const rot: f32 = (@as(f32, @floatFromInt(i)) / 8.0 + ease * 0.25) * std.math.tau;
+            const rad: f32 = easing.outCubic(ease) * 16 * 5;
+            const pos = self.solidWaistTestPos()
+                .add(world.camera.left().scale(@cos(rot) * rad))
+                .add(world.camera.up().scale(@sin(rot) * rad));
+            const size = 3 * s * 5;
+            // TODO: draw sprites in post
+            // world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size + 0.5, color_black)); // post
+            world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size, col)); // post
+        }
+    }
+
+    if (!self.on_ground and !self.dead and self.actor.cast_point_shadow.?.alpha > 0 and !self.inBubble()) { // && save.instance.z_guide
+        if (world.solidRayCast(self.actor.position, Vec3.new(0, 0, -1), 1000 * 5, .{})) |hit| {
+            var z: f32 = 3 * 5;
+            while (z < hit.distance) : (z += 5 * 5) {
+                world.drawSprite(Sprite.createBillboard(world, self.actor.position.sub(Vec3.new(0, 0, z)), circle_tex, 0.5 * 5, .{ 0.25, 0.25, 0.25, 0.5 }));
+            }
+        }
+    }
 }
 
 // state machine functions
@@ -1350,6 +1380,7 @@ fn stDeadUpdate(self: *Player) void {
         // TODO: remove and use game transition
         self.state_machine.setState(.respawn);
         self.actor.position = Vec3.new(0, -400, 300);
+        self.dead = false;
     }
 
     // TODO

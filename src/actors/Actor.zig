@@ -8,7 +8,7 @@ const ShaderInfo = @import("../Model.zig").ShaderInfo;
 const Actor = @This();
 
 const CastPointShadow = struct {
-    alpha: f32 = 0,
+    alpha: f32 = 1,
 };
 
 position: Vec3 = Vec3.zero(),

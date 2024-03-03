@@ -441,6 +441,12 @@ pub fn draw(self: *World, camera: Camera) void {
     };
     for (self.actors.items) |actor| {
         actor.draw(si);
+
+        if (actor.cast_point_shadow) |point_shadow| {
+            if (Sprite.createShadowSprite(self, actor.position.add(Vec3.new(0, 0, 1 * 5)), point_shadow.alpha)) |shadow_sprite| {
+                self.drawSprite(shadow_sprite);
+            }
+        }
     }
 
     // sprites

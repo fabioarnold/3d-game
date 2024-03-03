@@ -61,7 +61,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     _ = si;
     const self = @fieldParentPtr(Dust, "actor", actor);
     world.drawSprite(Sprite.createBillboard(
-        world.camera,
+        &world.camera,
         actor.position,
         self.image,
         5 * 4 * (1.0 - self.percent),

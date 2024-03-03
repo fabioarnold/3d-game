@@ -11,6 +11,7 @@ const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
 const World = @import("World.zig");
 const Solid = @import("actors/Solid.zig");
+const Snow = @import("actors/Snow.zig");
 const Skybox = @import("Skybox.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
@@ -32,8 +33,16 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
         return error.QuakeMapRead;
     };
 
+    // TODO: move to World constructor
     const skybox_name = try quake_map.worldspawn.getStringProperty("skybox");
     world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
+    const snow_amount = quake_map.worldspawn.getFloatProperty("snowAmount") catch 1;
+    const snow_wind = quake_map.worldspawn.getVec3Property("snowDirection") catch Vec3.new(0,0,-1);
+
+    if (snow_amount > 0) {
+        const snow = try Snow.create(allocator, snow_amount, snow_wind);
+        try world.actors.append(snow);
+    }
 
     const solid = try World.Actor.create(World.Solid, allocator);
     try generateSolid(allocator, solid, quake_map.worldspawn.solids.items);

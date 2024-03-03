@@ -65,6 +65,7 @@ pub const Granny = struct {
 
     pub fn init(actor: *Actor) void {
         const granny = @fieldParentPtr(Granny, "actor", actor);
+        actor.cast_point_shadow = .{};
         granny.skinned_model = .{ .model = models.findByName("granny") };
         granny.skinned_model.play("Idle");
     }

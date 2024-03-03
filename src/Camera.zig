@@ -44,6 +44,12 @@ pub fn up(self: Camera) Vec3 {
     return y.mul(x).rotateVec(Vec3.new(0, 0, 1));
 }
 
+pub fn forward(self: Camera) Vec3 {
+    const x = Quat.fromAxis(self.angles.x(), Vec3.new(1, 0, 0));
+    const y = Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1));
+    return y.mul(x).rotateVec(Vec3.new(0, 1, 0));
+}
+
 pub fn handleKeys(self: *Camera) void {
     const speed: f32 = if (wasm.isKeyDown(keys.KEY_SHIFT)) 100 else 20;
     var move = Vec3.zero();

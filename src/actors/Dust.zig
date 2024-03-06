@@ -51,10 +51,9 @@ pub fn update(actor: *Actor) void {
     actor.position = actor.position.add(self.velocity.scale(time.delta));
     self.velocity.zMut().* += 5 * 10 * time.delta;
 
-    var v_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+    var v_xy = self.velocity.toVec2();
     v_xy = math.approachVec2(v_xy, Vec2.zero(), 5 * 200 * time.delta);
-    self.velocity.xMut().* = v_xy.x();
-    self.velocity.yMut().* = v_xy.y();
+    self.velocity = v_xy.toVec3(self.velocity.z());
 
     self.percent += time.delta / self.duration;
     if (self.percent >= 1) {

@@ -497,8 +497,8 @@ fn jump(self: *Player) void {
     if (!input.eql(Vec2.zero())) {
         input = input.norm();
         self.target_facing = input;
-        self.velocity.data[0] += input.x() * jump_xy_boost;
-        self.velocity.data[1] += input.y() * jump_xy_boost;
+        self.velocity.xMut().* += input.x() * jump_xy_boost;
+        self.velocity.yMut().* += input.y() * jump_xy_boost;
     }
 
     self.cancelGroundSnap();
@@ -517,8 +517,8 @@ fn wallJump(self: *Player) void {
     self.auto_jump = false;
 
     const vel_xy = self.target_facing.scale(wall_jump_xy_speed);
-    self.velocity.data[0] = vel_xy.x();
-    self.velocity.data[1] = vel_xy.y();
+    self.velocity.xMut().* = vel_xy.x();
+    self.velocity.yMut().* = vel_xy.y();
 
     self.addPlatformVelocity(false);
     self.cancelGroundSnap();
@@ -636,13 +636,13 @@ fn popout(self: *Player, resolve_impact: bool) bool {
 fn addPlatformVelocity(self: *Player, play_sound: bool) void {
     if (self.t_platform_velocity_storage > 0) {
         var add = self.platform_velocity;
-        const add_xy = Vec2.new(add.x(), add.y());
+        const add_xy = add.toVec2();
 
         add.zMut().* = std.math.clamp(add.z(), 0, 180 * 5);
         const add_xy_length = add_xy.length();
         if (add_xy_length > 300 * 5) {
-            add.xMut().* *= 300 + 5 / add_xy_length;
-            add.yMut().* *= 300 + 5 / add_xy_length;
+            add.xMut().* *= 300 * 5 / add_xy_length;
+            add.yMut().* *= 300 * 5 / add_xy_length;
         }
 
         self.velocity = self.velocity.add(add);
@@ -667,7 +667,7 @@ fn climbCheckAt(self: Player, offset: Vec3) ?World.WallHit {
     const dir = Vec3.new(-self.target_facing.x(), -self.target_facing.y(), 0);
     if (world.solidWallCheckClosestToNormal(self.solidWaistTestPos().add(offset), climb_check_dist, dir)) |hit| {
         const rel_input = relativeMoveInput();
-        const hit_normal_xy = Vec2.new(hit.normal.x(), hit.normal.y());
+        const hit_normal_xy = hit.normal.toVec2();
         if (rel_input.eql(Vec2.zero()) or hit_normal_xy.dot(rel_input) <= -0.5 and climbNormalCheck(hit.normal)) {
             return hit;
         }
@@ -717,7 +717,7 @@ fn wallJumpCheck(self: *Player) bool {
         )) |hit| {
             controls.jump.pressed = false; // consume
             self.actor.position = self.actor.position.add(hit.pushout.scale(wall_pushout_dist / climb_check_dist));
-            const n_xy = Vec2.new(hit.normal.x(), hit.normal.y());
+            const n_xy = hit.normal.toVec2();
             self.target_facing = n_xy.norm();
             return true;
         }
@@ -824,7 +824,7 @@ fn stNormalUpdate(self: *Player) void {
 
     // movement
     {
-        var vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+        var vel_xy = self.velocity.toVec2();
         if (controls.move.eql(Vec2.zero()) or self.t_no_move > 0) {
             // if not moving, simply apply friction
 
@@ -838,7 +838,7 @@ fn stNormalUpdate(self: *Player) void {
             // change max speed based on ground slope angle
             if (!self.ground_normal.eql(Vec3.new(0, 0, 1))) {
                 var slope_dot = 1 - self.ground_normal.z();
-                const ground_normal_xy = Vec2.new(self.ground_normal.x(), self.ground_normal.y());
+                const ground_normal_xy = self.ground_normal.toVec2();
                 slope_dot *= ground_normal_xy.norm().dot(self.target_facing) * 2.0;
                 max += max * slope_dot;
             }
@@ -907,30 +907,27 @@ fn stNormalUpdate(self: *Player) void {
             vel_xy = math.approachVec2(vel_xy, relativeMoveInput().scale(max_speed), accel * time.delta);
         }
 
-        self.velocity = Vec3.new(vel_xy.x(), vel_xy.y(), self.velocity.z());
+        self.velocity = vel_xy.toVec3(self.velocity.z());
     }
 
     // footstep sounds
-    {
-        const vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
-        if (self.on_ground and vel_xy.length() > 10) {
-            self.t_footstep -= time.delta * self.skinned_model.rate;
-            if (self.t_footstep <= 0) {
-                self.t_footstep = footstep_interval;
-                // audio.play(.sfx_footstep_general, self.actor.position);
-            }
-
-            if (time.onInterval(0.05)) {
-                const x = world.rng.float(f32) * 6 - 3;
-                const y = world.rng.float(f32) * 6 - 3;
-                const pos = self.actor.position.add(Vec3.new(x, y, 0));
-                const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
-                const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
-                world.add(dust_actor);
-            }
-        } else {
+    if (self.on_ground and self.velocity.toVec2().length() > 10) {
+        self.t_footstep -= time.delta * self.skinned_model.rate;
+        if (self.t_footstep <= 0) {
             self.t_footstep = footstep_interval;
+            // audio.play(.sfx_footstep_general, self.actor.position);
         }
+
+        if (time.onInterval(0.05)) {
+            const x = world.rng.float(f32) * 6 - 3;
+            const y = world.rng.float(f32) * 6 - 3;
+            const pos = self.actor.position.add(Vec3.new(x, y, 0));
+            const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
+            const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+            world.add(dust_actor);
+        }
+    } else {
+        self.t_footstep = footstep_interval;
     }
 
     // start climbing
@@ -968,7 +965,7 @@ fn stNormalUpdate(self: *Player) void {
 
     // update model animations
     if (self.on_ground) {
-        const vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+        const vel_xy = self.velocity.toVec2();
         if (vel_xy.dot(vel_xy) > 1) {
             self.skinned_model.play("Run");
             self.skinned_model.rate = math.clampedMap(vel_xy.length(), 0, max_speed * 2, 0.1, 3);
@@ -1102,7 +1099,7 @@ fn stSkiddingUpdate(self: *Player) void {
         self.state_machine.setState(.normal);
         return;
     } else {
-        var vel_xy = Vec2.new(self.velocity.x(), self.velocity.y());
+        var vel_xy = self.velocity.toVec2();
 
         // skid jump
         if (self.t_no_skid_jump <= 0 and controls.jump.consumePress()) {
@@ -1116,7 +1113,7 @@ fn stSkiddingUpdate(self: *Player) void {
         // acceleration
         const accel: f32 = if (dot_matches) skidding_accel else skidding_start_accel;
         vel_xy = math.approachVec2(vel_xy, relativeMoveInput().scale(max_speed), accel * time.delta);
-        self.velocity = Vec3.new(vel_xy.x(), vel_xy.y(), self.velocity.z());
+        self.velocity = vel_xy.toVec3(self.velocity.z());
 
         // reached target
         if (dot_matches and vel_xy.length() >= end_skid_speed) {
@@ -1173,7 +1170,7 @@ fn stClimbingUpdate(self: *Player) void {
     // only change the input direction based on the camera when we stop moving
     // so if we keep holding a direction, we keep moving the same way (even if it's flipped in the perspective)
     if (@abs(controls.move.x()) < 0.5) {
-        const camera_target_forward_xy = Vec2.new(self.camera_target_forward.x(), self.camera_target_forward.y());
+        const camera_target_forward_xy = self.camera_target_forward.toVec2();
         self.climb_input_sign = if (self.target_facing.dot(camera_target_forward_xy.norm()) < -0.4) -1 else 1;
     }
 
@@ -1312,7 +1309,7 @@ fn stClimbingUpdate(self: *Player) void {
         // audio.play(sfx.sfx_climb_ledge, self.actor.position);
         self.state_machine.setState(.normal);
         const facing_xy = self.target_facing.scale(climb_hop_forward_speed);
-        self.velocity = Vec3.new(facing_xy.x(), facing_xy.y(), climb_hop_up_speed);
+        self.velocity = facing_xy.toVec3(climb_hop_up_speed);
         self.t_no_move = climb_hop_no_move_time;
         self.t_climb_cooldown = 0.3;
         self.auto_jump = false;

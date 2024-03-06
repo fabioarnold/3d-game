@@ -99,55 +99,9 @@ const Transform = struct {
     }
 
     fn toMat4(self: *Transform) Mat4 {
-        return composeMat4(self.translation, self.rotation, self.scale);
-        // return Mat4.recompose(self.translation, self.rotation, self.scale);
+        return Mat4.recompose(self.translation, self.rotation, self.scale);
     }
 };
-
-fn mat3FromQuat(q: Quat) Mat3 {
-    var result: Mat3 = undefined;
-    const xw = q.x * q.w;
-    const xx = q.x * q.x;
-    const xy = q.x * q.y;
-    const xz = q.x * q.z;
-    const yw = q.y * q.w;
-    const yy = q.y * q.y;
-    const yz = q.y * q.z;
-    const zw = q.z * q.w;
-    const zz = q.z * q.z;
-    result.data[0][0] = 1 - 2 * (yy + zz);
-    result.data[0][1] = 2 * (xy + zw);
-    result.data[0][2] = 2 * (xz - yw);
-    result.data[1][0] = 2 * (xy - zw);
-    result.data[1][1] = 1 - 2 * (xx + zz);
-    result.data[1][2] = 2 * (yz + xw);
-    result.data[2][0] = 2 * (xz + yw);
-    result.data[2][1] = 2 * (yz - xw);
-    result.data[2][2] = 1 - 2 * (xx + yy);
-    return result;
-}
-
-fn composeMat4(translation: Vec3, rotation: Quat, scale: Vec3) Mat4 {
-    var result: Mat4 = undefined;
-    const rot_mat = mat3FromQuat(rotation);
-    result.data[0][0] = rot_mat.data[0][0] * scale.x();
-    result.data[0][1] = rot_mat.data[0][1] * scale.x();
-    result.data[0][2] = rot_mat.data[0][2] * scale.x();
-    result.data[0][3] = 0;
-    result.data[1][0] = rot_mat.data[1][0] * scale.y();
-    result.data[1][1] = rot_mat.data[1][1] * scale.y();
-    result.data[1][2] = rot_mat.data[1][2] * scale.y();
-    result.data[1][3] = 0;
-    result.data[2][0] = rot_mat.data[2][0] * scale.z();
-    result.data[2][1] = rot_mat.data[2][1] * scale.z();
-    result.data[2][2] = rot_mat.data[2][2] * scale.z();
-    result.data[2][3] = 0;
-    result.data[3][0] = translation.x();
-    result.data[3][1] = translation.y();
-    result.data[3][2] = translation.z();
-    result.data[3][3] = 1;
-    return result;
-}
 
 fn sample(self: *SkinnedModel, comptime T: type, sampler: zgltf.AnimationSampler, t: f32) T {
     const samples = self.model.getFloatBuffer(self.model.gltf.data.accessors.items[sampler.input]);

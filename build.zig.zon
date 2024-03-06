@@ -8,8 +8,8 @@
     },
     .dependencies = .{
         .zalgebra = .{
-            .url = "https://github.com/kooparse/zalgebra/archive/01785b08cdbfb51e125ae939dad1d15928a7f352.tar.gz",
-            .hash = "12206e29e5d0f012c694f413b21cb66238964fdaef0a29781e0bf3ff75ec08a2ed78",
+            .url = "https://github.com/kooparse/zalgebra/archive/1ab7f25cd3f947289e98a617ae785607bbc5054e.tar.gz",
+            .hash = "1220665cd38b7e9625ddfe7cedde962586ceadf12ce8dd46acc5273c2d17fbf6afd7",
         },
         .zgltf = .{
             .url = "https://github.com/kooparse/zgltf/archive/79de7be54e57235496fc3277708991fc857ef7e7.tar.gz",

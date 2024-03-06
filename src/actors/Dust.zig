@@ -25,7 +25,7 @@ duration: f32,
 
 pub fn init(actor: *Actor) void {
     const self = @fieldParentPtr(Dust, "actor", actor);
-    self.* = Dust{
+    self.* = .{
         .actor = actor.*,
         .image = textures.findByName(images[world.rng.uintLessThan(usize, images.len)]),
         .color = undefined,
@@ -38,7 +38,7 @@ const CreateOptions = struct {
 };
 
 pub fn create(allocator: std.mem.Allocator, position: Vec3, velocity: Vec3, options: CreateOptions) !*Actor {
-    const dust = try World.Actor.create(Dust, allocator);
+    const dust = try Actor.create(Dust, allocator);
     dust.actor.position = position;
     dust.velocity = velocity;
     dust.color = options.color;

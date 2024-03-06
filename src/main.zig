@@ -30,7 +30,9 @@ var video_scale: f32 = 1;
 
 const State = struct {
     camera: Camera,
+    player_position: Vec3,
 };
+var state: State = undefined;
 
 var loaded: bool = false; // all textures are loaded
 
@@ -52,7 +54,14 @@ export fn onImagesLoaded() void {
 
     SpriteRenderer.init(allocator);
     World.loadShaders();
-    world.load(allocator, "1") catch unreachable;
+    world.load(allocator, .{
+        .map = "1",
+        .checkpoint = "",
+        .submap = false,
+        .reason = .entered,
+    }) catch unreachable;
+
+    world.player.actor.position = state.player_position;
 }
 
 export fn onLoadSnapshot(handle: wasm.String.Handle) void {
@@ -63,12 +72,16 @@ export fn onLoadSnapshot(handle: wasm.String.Handle) void {
         return;
     };
     defer parsed.deinit();
-    const state = parsed.value;
+    state = parsed.value;
+
     world.camera = state.camera;
+    world.player.actor.position = state.player_position;
 }
 
 export fn onSaveSnapshot() wasm.String.Handle {
-    const state = State{ .camera = world.camera };
+    state.camera = world.camera;
+    state.player_position = world.player.actor.position;
+
     var array = std.ArrayList(u8).init(allocator);
     std.json.stringify(state, .{}, array.writer()) catch |e| {
         logger.err("Snapshot saving failed {}", .{e});

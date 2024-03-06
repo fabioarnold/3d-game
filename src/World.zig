@@ -17,6 +17,7 @@ const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
 pub const Actor = @import("actors/Actor.zig");
 pub const Solid = @import("actors/Solid.zig");
+pub const Checkpoint = @import("actors/Checkpoint.zig");
 pub const Player = @import("actors/Player.zig");
 const Map = @import("Map.zig");
 const logger = std.log.scoped(.world);
@@ -89,31 +90,22 @@ pub const StaticProp = struct {
     }
 };
 
-pub const Checkpoint = struct {
-    const model_off = models.findByName("flag_off");
-
-    actor: Actor,
-    model_on: SkinnedModel,
-    current: bool,
-
-    pub fn draw(actor: *Actor, si: ShaderInfo) void {
-        const checkpoint = @fieldParentPtr(Checkpoint, "actor", actor);
-        const model_mat = actor.getTransform();
-        if (checkpoint.current) {
-            checkpoint.model_on.update();
-            checkpoint.model_on.draw(si, model_mat);
-        } else {
-            model_off.draw(si, model_mat);
-        }
-    }
+const EntryReason = enum { entered, returned, respawned };
+const EntryInfo = struct {
+    map: []const u8,
+    checkpoint: []const u8,
+    submap: bool,
+    reason: EntryReason,
 };
 
 pub const death_plane = -100 * 5;
 
-camera: Camera = .{},
-
 allocator: std.mem.Allocator = undefined,
+
+camera: Camera = .{},
 rng: std.rand.Random = undefined,
+entry: EntryInfo = undefined,
+
 actors: std.ArrayList(*Actor) = undefined,
 adding: std.ArrayList(*Actor) = undefined,
 destroying: std.ArrayList(*Actor) = undefined,
@@ -193,8 +185,9 @@ pub fn loadShaders() void {
 
 var prng: std.rand.DefaultPrng = undefined;
 
-pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
+pub fn load(self: *World, allocator: Allocator, entry: EntryInfo) !void {
     self.allocator = allocator;
+    self.entry = entry;
     prng = std.rand.DefaultPrng.init(0);
     self.rng = prng.random();
     self.actors = std.ArrayList(*Actor).init(allocator);
@@ -203,7 +196,7 @@ pub fn load(self: *World, allocator: Allocator, map_name: []const u8) !void {
     self.solids = std.ArrayList(*Solid).init(allocator);
     self.sprites = std.ArrayList(Sprite).init(allocator);
     // self.clear()
-    try Map.load(allocator, self, map_name);
+    try Map.load(allocator, self, entry.map);
 }
 
 pub fn add(self: *World, actor: *Actor) void {

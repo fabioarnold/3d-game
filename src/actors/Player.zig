@@ -277,6 +277,18 @@ fn solidHeadTestPos(self: Player) Vec3 {
 fn inBubble(self: Player) bool {
     return self.state_machine.state == .bubble;
 }
+fn isAbleToPickup(self: Player) bool {
+    return switch (self.state_machine.state) {
+        .strawberry_get,
+        .bubble,
+        .cassette,
+        .strawberry_reveal,
+        .respawn,
+        .dead,
+        => false,
+        else => true,
+    };
+}
 
 pub fn init(actor: *Actor) void {
     const self = @fieldParentPtr(Player, "actor", actor);
@@ -375,7 +387,17 @@ pub fn update(actor: *Actor) void {
         _ = self.popout(false);
     }
 
-    // TODO: pickups
+    // pickups
+    if (self.isAbleToPickup()) {
+        for (world.actors.items) |pickup_actor| {
+            if (pickup_actor.pickup) |pickup| {
+                const diff = self.solidWaistTestPos().sub(pickup_actor.position);
+                if (diff.dot(diff) < pickup.radius * pickup.radius) {
+                    pickup_actor.onPickup();
+                }
+            }
+        }
+    }
 
     // TODO: move to world
     self.lateUpdate();

@@ -10,6 +10,9 @@ const Actor = @This();
 const CastPointShadow = struct {
     alpha: f32 = 1,
 };
+const Pickup = struct {
+    radius: f32,
+};
 
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
@@ -18,15 +21,18 @@ destroying: bool = false,
 derived: *anyopaque,
 deinitFn: *const fn (*Actor, Allocator) void,
 updateFn: *const fn (*Actor) void,
+onPickupFn: *const fn (*Actor) void,
 drawFn: *const fn (*Actor, ShaderInfo) void,
 
 cast_point_shadow: ?CastPointShadow = null,
+pickup: ?Pickup = null,
 
 pub fn create(comptime Derived: type, allocator: Allocator) !*Derived {
     var derived = try allocator.create(Derived);
     derived.actor = .{
         .derived = derived,
-        .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &updateNoOp,
+        .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &noOp,
+        .onPickupFn = if (@hasDecl(Derived, "onPickup")) &@field(Derived, "onPickup") else &noOp,
         .drawFn = &Derived.draw,
         .deinitFn = &struct {
             fn deinit(self: *Actor, ally: Allocator) void {
@@ -51,10 +57,14 @@ pub fn getTransform(self: Actor) Mat4 {
     return t.mul(r);
 }
 
-fn updateNoOp(_: *Actor) void {}
+fn noOp(_: *Actor) void {}
 
 pub fn update(self: *Actor) void {
     self.updateFn(self);
+}
+
+pub fn onPickup(self: *Actor) void {
+    self.onPickupFn(self);
 }
 
 pub fn draw(self: *Actor, si: ShaderInfo) void {

@@ -37,7 +37,7 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     const skybox_name = try quake_map.worldspawn.getStringProperty("skybox");
     world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
     const snow_amount = quake_map.worldspawn.getFloatProperty("snowAmount") catch 1;
-    const snow_wind = quake_map.worldspawn.getVec3Property("snowDirection") catch Vec3.new(0,0,-1);
+    const snow_wind = quake_map.worldspawn.getVec3Property("snowDirection") catch Vec3.new(0, 0, -1);
 
     if (snow_amount > 0) {
         const snow = try Snow.create(allocator, snow_amount, snow_wind);
@@ -68,23 +68,24 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
     try world.actors.append(&decoration_solid.actor);
 }
 
+const start_checkpoint = "Start";
+
 fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void {
     if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
         const name = try entity.getStringProperty("name");
 
-        const spawns_player = std.mem.eql(u8, name, "Start");
+        const spawns_player = std.mem.eql(u8, world.entry.checkpoint, name) or
+            (std.mem.eql(u8, world.entry.checkpoint, "") and std.mem.eql(u8, name, start_checkpoint));
+        // TODO: check if world.entry.checkpoint doesn't exist
 
         if (spawns_player) {
             var player = try World.Actor.create(World.Player, allocator);
             try handleActorCreation(world, entity, &player.actor);
             world.player = player;
-        } else {
-            var checkpoint = try World.Actor.create(World.Checkpoint, allocator);
-            checkpoint.model_on = .{
-                .model = models.findByName("flag_on"),
-            };
-            checkpoint.model_on.play("Idle");
-            checkpoint.current = true;
+        }
+
+        if (!std.mem.eql(u8, name, start_checkpoint)) {
+            var checkpoint = try World.Checkpoint.create(allocator, name);
             try handleActorCreation(world, entity, &checkpoint.actor);
         }
     } else if (try createActor(allocator, entity)) |actor| {

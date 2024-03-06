@@ -1,7 +1,11 @@
 const std = @import("std");
+const za = @import("zalgebra");
+const Vec3 = za.Vec3;
 const math = @import("../math.zig");
 const time = @import("../time.zig");
+const textures = @import("../textures.zig");
 const models = @import("../models.zig");
+const Sprite = @import("../Sprite.zig");
 const Model = @import("../Model.zig");
 const SkinnedModel = @import("../SkinnedModel.zig");
 const World = @import("../World.zig");
@@ -32,7 +36,7 @@ pub fn init(actor: *Actor) void {
         },
     };
     self.model_on.play("Idle");
-    self.actor.pickup = .{.radius = 16 * 5};
+    self.actor.pickup = .{ .radius = 16 * 5 };
 }
 
 pub fn create(allocator: std.mem.Allocator, name: []const u8) !*Checkpoint {
@@ -77,5 +81,16 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
         model_off.draw(si, model_mat);
     }
 
-    // TODO sprites
+    const halo_pos = actor.position.add(Vec3.new(0, 0, 16 * 5));
+    const halo_color = if (self.isCurrent()) [_]f32{ 0.498, 0.871, 0.275, 0.4 } else [_]f32{ 0.875, 0.353, 0.706, 0.4 };
+    const gradient_tex = textures.findByName("gradient");
+    var gradient_color = halo_color;
+    gradient_color[3] *= 0.4;
+    world.drawSprite(Sprite.createBillboard(world, halo_pos, gradient_tex, 12 * 5, gradient_color));
+
+    if (self.t_wiggle > 0) {
+        const ring_tex = textures.findByName("ring");
+        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, halo_color)); // TODO in post
+        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * 50 * 5, halo_color)); // TODO in post
+    }
 }

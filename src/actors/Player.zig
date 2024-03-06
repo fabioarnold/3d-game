@@ -1033,7 +1033,7 @@ fn stDashingEnter(self: *Player) void {
     // else
     // 	Audio.Play(Sfx.sfx_dash_pink, Position);
 
-    //CancelGroundSnap();
+    self.cancelGroundSnap();
 }
 
 fn stDashingExit(self: *Player) void {

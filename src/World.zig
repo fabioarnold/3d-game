@@ -7,6 +7,7 @@ const Mat4 = za.Mat4;
 const math = @import("math.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
+const shaders = @import("shaders.zig");
 const Sprite = @import("Sprite.zig");
 const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
@@ -113,75 +114,6 @@ solids: std.ArrayList(*Solid) = undefined,
 sprites: std.ArrayList(Sprite) = undefined,
 player: *Player = undefined,
 skybox: Skybox = undefined,
-
-var textured_unlit_shader: gl.GLuint = undefined;
-var textured_unlit_mvp_loc: gl.GLint = undefined;
-
-var textured_skinned_shader: gl.GLuint = undefined;
-var textured_skinned_viewprojection_loc: gl.GLint = undefined;
-var textured_skinned_model_loc: gl.GLint = undefined;
-var textured_skinned_joints_loc: gl.GLint = undefined;
-var textured_skinned_blend_skin_loc: gl.GLint = undefined;
-var textured_skinned_color_loc: gl.GLint = undefined;
-var textured_skinned_effects_loc: gl.GLint = undefined;
-
-var sprite_shader: gl.GLuint = undefined;
-var sprite_viewprojection_loc: gl.GLint = undefined;
-
-fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []const u8) gl.GLuint {
-    const vert_shader = gl.glInitShader(vert_src.ptr, vert_src.len, gl.GL_VERTEX_SHADER);
-    const frag_shader = gl.glInitShader(frag_src.ptr, frag_src.len, gl.GL_FRAGMENT_SHADER);
-    const program = gl.glCreateProgram();
-    gl.glAttachShader(program, vert_shader);
-    gl.glAttachShader(program, frag_shader);
-    for (attribs, 0..) |attrib, i| {
-        gl.glBindAttribLocation(program, i, @ptrCast(attrib));
-    }
-    gl.glLinkProgram(program);
-    return program;
-}
-
-pub fn loadShaders() void {
-    textured_unlit_shader = loadShader(
-        @embedFile("shaders/transform_pt.vert"),
-        @embedFile("shaders/textured_unlit.frag"),
-        &.{ "a_position", "a_texcoord" },
-    );
-    gl.glUseProgram(textured_unlit_shader);
-    textured_unlit_mvp_loc = gl.glGetUniformLocation(textured_unlit_shader, "u_mvp");
-    gl.glUniform1i(gl.glGetUniformLocation(textured_unlit_shader, "u_texture"), 0);
-
-    textured_skinned_shader = loadShader(
-        @embedFile("shaders/transform_skinned.vert"),
-        @embedFile("shaders/textured.frag"),
-        &.{ "a_position", "a_normal", "a_texcoord", "a_joint", "a_weight" },
-    );
-    gl.glUseProgram(textured_skinned_shader);
-    textured_skinned_viewprojection_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_viewprojection");
-    textured_skinned_model_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_model");
-    textured_skinned_joints_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_joints");
-    textured_skinned_blend_skin_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_blend_skin");
-    const textured_skinned_texture_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_texture");
-    textured_skinned_color_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_color");
-    const textured_skinned_sun_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_sun");
-    textured_skinned_effects_loc = gl.glGetUniformLocation(textured_skinned_shader, "u_effects");
-    gl.glUniform1f(textured_skinned_blend_skin_loc, 0);
-    gl.glUniform1i(textured_skinned_texture_loc, 0);
-    gl.glUniform4f(textured_skinned_color_loc, 1, 1, 1, 1);
-    const sun = Vec3.new(0, -0.7, -1.0).norm();
-    gl.glUniform3f(textured_skinned_sun_loc, sun.x(), sun.y(), sun.z());
-    gl.glUniform1f(textured_skinned_effects_loc, 1);
-
-    sprite_shader = loadShader(
-        @embedFile("shaders/sprite.vert"),
-        @embedFile("shaders/sprite.frag"),
-        &.{ "a_position", "a_texcoord", "a_color" },
-    );
-    gl.glUseProgram(sprite_shader);
-    sprite_viewprojection_loc = gl.glGetUniformLocation(sprite_shader, "u_viewprojection");
-    const sprite_texture_loc = gl.glGetUniformLocation(sprite_shader, "u_texture");
-    gl.glUniform1i(sprite_texture_loc, 0);
-}
 
 var prng: std.rand.DefaultPrng = undefined;
 
@@ -410,28 +342,28 @@ pub fn draw(self: *World, camera: Camera) void {
 
     // skybox
     {
-        gl.glUseProgram(textured_unlit_shader);
+        gl.glUseProgram(shaders.textured_unlit.shader);
         gl.glDisable(gl.GL_DEPTH_TEST);
         gl.glDepthMask(gl.GL_FALSE);
         gl.glCullFace(gl.GL_FRONT);
         const mvp = view_projection
             .mul(Mat4.fromTranslate(camera.position))
             .mul(Mat4.fromScale(Vec3.new(1, 1, 0.5)));
-        self.skybox.draw(textured_unlit_mvp_loc, mvp, 300);
+        self.skybox.draw(shaders.textured_unlit.mvp_loc, mvp, 300);
         gl.glCullFace(gl.GL_BACK);
         gl.glDepthMask(gl.GL_TRUE);
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
 
     // actors
-    gl.glUseProgram(textured_skinned_shader);
-    gl.glUniformMatrix4fv(textured_skinned_viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
+    gl.glUseProgram(shaders.textured_skinned.shader);
+    gl.glUniformMatrix4fv(shaders.textured_skinned.viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     const si = ShaderInfo{
-        .model_loc = textured_skinned_model_loc,
-        .joints_loc = textured_skinned_joints_loc,
-        .blend_skin_loc = textured_skinned_blend_skin_loc,
-        .color_loc = textured_skinned_color_loc,
-        .effects_loc = textured_skinned_effects_loc,
+        .model_loc = shaders.textured_skinned.model_loc,
+        .joints_loc = shaders.textured_skinned.joints_loc,
+        .blend_skin_loc = shaders.textured_skinned.blend_skin_loc,
+        .color_loc = shaders.textured_skinned.color_loc,
+        .effects_loc = shaders.textured_skinned.effects_loc,
     };
     for (self.actors.items) |actor| {
         actor.draw(si);
@@ -444,7 +376,7 @@ pub fn draw(self: *World, camera: Camera) void {
     }
 
     // sprites
-    gl.glUseProgram(sprite_shader);
-    gl.glUniformMatrix4fv(sprite_viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
+    gl.glUseProgram(shaders.sprite.shader);
+    gl.glUniformMatrix4fv(shaders.sprite.viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     self.drawSprites();
 }

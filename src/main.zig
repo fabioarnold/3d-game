@@ -9,6 +9,7 @@ const keys = @import("web/keys.zig");
 const time = @import("time.zig");
 const controls = @import("controls.zig");
 const primitives = @import("primitives.zig");
+const shaders = @import("shaders.zig");
 const textures = @import("textures.zig");
 const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
@@ -53,7 +54,7 @@ export fn onImagesLoaded() void {
     textures.updateParameters();
 
     SpriteRenderer.init(allocator);
-    World.loadShaders();
+    shaders.load();
     world.load(allocator, .{
         .map = "1",
         .checkpoint = "",

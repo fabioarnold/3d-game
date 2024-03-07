@@ -45,7 +45,7 @@ fn addVertex(list: *std.ArrayList(Vertex), v: Vec3, uv: Vec2, color: [4]f32) voi
     });
 }
 
-pub fn draw(sprites: []const Sprite) !void {
+pub fn draw(sprites: []const Sprite, post_effects: bool) !void {
     if (sprites.len == 0) return;
 
     vertices.clearRetainingCapacity();
@@ -57,6 +57,8 @@ pub fn draw(sprites: []const Sprite) !void {
     var init_batch = Batch{ .texture_id = 0xFFFFFFFF, .index_start = 0, .index_count = 0 };
     var current = &init_batch;
     for (sprites) |*sprite| {
+        if (sprite.post != post_effects) continue;
+
         if (sprite.texture.id != current.texture_id) {
             current = batches.addOne() catch unreachable;
             current.* = .{
@@ -80,6 +82,9 @@ pub fn draw(sprites: []const Sprite) !void {
 
         current.index_count += 6;
     }
+
+    if (post_effects) gl.glDisable(gl.GL_DEPTH_TEST);
+    defer gl.glEnable(gl.GL_DEPTH_TEST);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo);
     gl.glBufferData(gl.GL_ARRAY_BUFFER, @intCast(@sizeOf(Vertex) * vertices.items.len), @ptrCast(vertices.items.ptr), gl.GL_STREAM_DRAW);

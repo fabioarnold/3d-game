@@ -14,6 +14,7 @@ v1: Vec3,
 v2: Vec3,
 v3: Vec3,
 color: [4]f32,
+post: bool = false,
 
 pub fn createShadowSprite(world: *World, position: Vec3, alpha: f32) ?Sprite {
     if (world.solidRayCast(position, Vec3.new(0, 0, -1), 1000 * 5, .{})) |hit| {
@@ -38,7 +39,7 @@ pub fn createShadowSprite(world: *World, position: Vec3, alpha: f32) ?Sprite {
     return null;
 }
 
-pub fn createBillboard(world: *World, at: Vec3, texture: Texture, size: f32, color: [4]f32) Sprite {
+pub fn createBillboard(world: *World, at: Vec3, texture: Texture, size: f32, color: [4]f32, post: bool) Sprite {
     const left = world.camera.left().scale(size);
     const up = world.camera.up().scale(size);
     return .{
@@ -48,5 +49,6 @@ pub fn createBillboard(world: *World, at: Vec3, texture: Texture, size: f32, col
         .v2 = at.sub(left).sub(up),
         .v3 = at.add(left).sub(up),
         .color = color,
+        .post = post,
     };
 }

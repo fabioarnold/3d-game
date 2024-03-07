@@ -796,7 +796,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
 
     const circle_tex = textures.findByName("circle");
     const color_white: [4]f32 = .{ 1, 1, 1, 1 };
-    // const color_black: [4]f32 = .{ 0, 0, 0, 1 };
+    const color_black: [4]f32 = .{ 0, 0, 0, 1 };
     if (self.draw_orbs and self.draw_orbs_ease > 0) {
         const ease = self.draw_orbs_ease;
         const col = if (@mod(@floor(ease * 10), 2) == 0) self.hair.color else color_white;
@@ -808,9 +808,8 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
                 .add(world.camera.left().scale(@cos(rot) * rad))
                 .add(world.camera.up().scale(@sin(rot) * rad));
             const size = 3 * s * 5;
-            // TODO: draw sprites in post
-            // world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size + 0.5, color_black)); // post
-            world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size, col)); // post
+            world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size + 0.5, color_black, true));
+            world.drawSprite(Sprite.createBillboard(world, pos, circle_tex, size, col, true));
         }
     }
 
@@ -818,7 +817,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
         if (world.solidRayCast(self.actor.position, Vec3.new(0, 0, -1), 1000 * 5, .{})) |hit| {
             var z: f32 = 3 * 5;
             while (z < hit.distance) : (z += 5 * 5) {
-                world.drawSprite(Sprite.createBillboard(world, self.actor.position.sub(Vec3.new(0, 0, z)), circle_tex, 0.5 * 5, .{ 0.25, 0.25, 0.25, 0.5 }));
+                world.drawSprite(Sprite.createBillboard(world, self.actor.position.sub(Vec3.new(0, 0, z)), circle_tex, 0.5 * 5, .{ 0.5, 0.5, 0.5, 0.5 }, false));
             }
         }
     }

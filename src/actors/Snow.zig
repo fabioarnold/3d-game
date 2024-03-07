@@ -94,7 +94,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
                         y + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.y() * 5, area),
                         z + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.z() * 5, area),
                     );
-                    const sprite = Sprite.createBillboard(world, pos, texture, 0.5 * 5, color);
+                    const sprite = Sprite.createBillboard(world, pos, texture, 0.5 * 5, color, false);
                     world.drawSprite(sprite);
                 }
             }

@@ -333,7 +333,8 @@ pub fn drawSprite(self: *World, sprite: Sprite) void {
 }
 
 pub fn drawSprites(self: *World) void {
-    SpriteRenderer.draw(self.sprites.items) catch unreachable;
+    SpriteRenderer.draw(self.sprites.items, false) catch unreachable;
+    SpriteRenderer.draw(self.sprites.items, true) catch unreachable;
     self.sprites.clearRetainingCapacity();
 }
 
@@ -375,7 +376,7 @@ pub fn draw(self: *World, camera: Camera) void {
         }
     }
 
-    // sprites
+    // render 2d sprites
     gl.glUseProgram(shaders.sprite.shader);
     gl.glUniformMatrix4fv(shaders.sprite.viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     self.drawSprites();

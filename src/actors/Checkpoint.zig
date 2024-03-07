@@ -86,11 +86,11 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const gradient_tex = textures.findByName("gradient");
     var gradient_color = halo_color;
     gradient_color[3] *= 0.4;
-    world.drawSprite(Sprite.createBillboard(world, halo_pos, gradient_tex, 12 * 5, gradient_color));
+    world.drawSprite(Sprite.createBillboard(world, halo_pos, gradient_tex, 12 * 5, gradient_color, false));
 
     if (self.t_wiggle > 0) {
         const ring_tex = textures.findByName("ring");
-        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, halo_color)); // TODO in post
-        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * 50 * 5, halo_color)); // TODO in post
+        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, halo_color, true));
+        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * 50 * 5, halo_color, true));
     }
 }

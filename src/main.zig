@@ -8,6 +8,7 @@ const wasm = @import("web/wasm.zig");
 const keys = @import("web/keys.zig");
 const time = @import("time.zig");
 const controls = @import("controls.zig");
+const maps = @import("maps.zig");
 const primitives = @import("primitives.zig");
 const shaders = @import("shaders.zig");
 const textures = @import("textures.zig");
@@ -41,6 +42,8 @@ export fn onLoadImages() void {
     textures.load();
     models.load(allocator) catch unreachable;
     primitives.load();
+    maps.load(allocator) catch unreachable;
+    world.* = World.init(allocator);
 }
 
 export fn onImagesLoaded() void {
@@ -55,14 +58,15 @@ export fn onImagesLoaded() void {
 
     SpriteRenderer.init(allocator);
     shaders.load();
-    world.load(allocator, .{
+    world.load(.{
         .map = "1",
         .checkpoint = "",
         .submap = false,
         .reason = .entered,
     }) catch unreachable;
-
-    world.player.actor.position = state.player_position;
+    world.camera.position = state.camera.position;
+    world.camera.angles = state.camera.angles;
+    // world.player.actor.position = state.player_position;
 }
 
 export fn onLoadSnapshot(handle: wasm.String.Handle) void {
@@ -74,9 +78,6 @@ export fn onLoadSnapshot(handle: wasm.String.Handle) void {
     };
     defer parsed.deinit();
     state = parsed.value;
-
-    world.camera = state.camera;
-    world.player.actor.position = state.player_position;
 }
 
 export fn onSaveSnapshot() wasm.String.Handle {

@@ -16,16 +16,18 @@ const ShaderInfo = Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
-pub const Actor = @import("actors/Actor.zig");
-pub const Solid = @import("actors/Solid.zig");
-pub const Checkpoint = @import("actors/Checkpoint.zig");
-pub const Player = @import("actors/Player.zig");
+const Actor = @import("actors/Actor.zig");
+const Snow = @import("actors/Snow.zig");
+const Solid = @import("actors/Solid.zig");
+const Checkpoint = @import("actors/Checkpoint.zig");
+const Player = @import("actors/Player.zig");
+const maps = @import("maps.zig");
 const Map = @import("Map.zig");
 const logger = std.log.scoped(.world);
 
 const World = @This();
 
-pub var world: World = .{};
+pub var world: World = undefined;
 
 pub const FloatingDecoration = struct {
     actor: Actor,
@@ -101,34 +103,77 @@ const EntryInfo = struct {
 
 pub const death_plane = -100 * 5;
 
-allocator: std.mem.Allocator = undefined,
+allocator: std.mem.Allocator,
 
 camera: Camera = .{},
-rng: std.rand.Random = undefined,
-entry: EntryInfo = undefined,
+rng: std.rand.Random,
+entry: EntryInfo,
 
-actors: std.ArrayList(*Actor) = undefined,
-adding: std.ArrayList(*Actor) = undefined,
-destroying: std.ArrayList(*Actor) = undefined,
-solids: std.ArrayList(*Solid) = undefined,
-sprites: std.ArrayList(Sprite) = undefined,
-player: *Player = undefined,
-skybox: Skybox = undefined,
+actors: std.ArrayList(*Actor),
+adding: std.ArrayList(*Actor),
+destroying: std.ArrayList(*Actor),
+solids: std.ArrayList(*Solid),
+sprites: std.ArrayList(Sprite),
+player: *Player,
+skybox: Skybox,
 
 var prng: std.rand.DefaultPrng = undefined;
 
-pub fn load(self: *World, allocator: Allocator, entry: EntryInfo) !void {
-    self.allocator = allocator;
-    self.entry = entry;
+pub fn init(allocator: Allocator) World {
     prng = std.rand.DefaultPrng.init(0);
-    self.rng = prng.random();
-    self.actors = std.ArrayList(*Actor).init(allocator);
-    self.adding = std.ArrayList(*Actor).init(allocator);
-    self.destroying = std.ArrayList(*Actor).init(allocator);
-    self.solids = std.ArrayList(*Solid).init(allocator);
-    self.sprites = std.ArrayList(Sprite).init(allocator);
-    // self.clear()
-    try Map.load(allocator, self, entry.map);
+    return .{
+        .allocator = allocator,
+        .rng = prng.random(),
+        .entry = undefined,
+        .actors = std.ArrayList(*Actor).init(allocator),
+        .adding = std.ArrayList(*Actor).init(allocator),
+        .destroying = std.ArrayList(*Actor).init(allocator),
+        .solids = std.ArrayList(*Solid).init(allocator),
+        .sprites = std.ArrayList(Sprite).init(allocator),
+        .player = undefined,
+        .skybox = undefined,
+    };
+}
+
+pub fn load(self: *World, entry: EntryInfo) !void {
+    self.clear();
+
+    self.entry = entry;
+
+    const map = maps.findByName(entry.map);
+
+    // environment
+    {
+        if (map.snow_amount > 0) {
+            const snow = try Snow.create(self.allocator, map.snow_amount, map.snow_wind);
+            try self.actors.append(snow);
+        }
+
+        if (map.skybox.len > 0) {
+            // single skybox
+            const suffix = if (std.mem.eql(u8, map.skybox, "bsides")) "_0" else "";
+            const skybox_name = try std.mem.concat(self.allocator, u8, &.{ "skybox_", map.skybox, suffix });
+            defer self.allocator.free(skybox_name);
+            self.skybox = Skybox.load(skybox_name);
+            // TODO: group
+        }
+
+        // Music = $"event:/music/{map.Music}";
+        // Ambience = $"event:/sfx/ambience/{map.Ambience}";
+    }
+
+    try map.load(self.allocator, self);
+}
+
+fn clear(self: *World) void {
+    for (self.actors.items) |actor| {
+        actor.deinit(self.allocator);
+    }
+    self.actors.clearRetainingCapacity();
+    self.adding.clearRetainingCapacity();
+    self.destroying.clearRetainingCapacity();
+    self.solids.clearRetainingCapacity();
+    self.sprites.clearRetainingCapacity();
 }
 
 pub fn add(self: *World, actor: *Actor) void {

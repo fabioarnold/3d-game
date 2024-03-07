@@ -1,4 +1,14 @@
 pub const maps = struct {
+    pub var @"1-1" = @embedFile("Maps/1-1.map");
+    pub var @"1-10" = @embedFile("Maps/1-10.map");
+    pub var @"1-2" = @embedFile("Maps/1-2.map");
+    pub var @"1-3" = @embedFile("Maps/1-3.map");
+    pub var @"1-4" = @embedFile("Maps/1-4.map");
+    pub var @"1-5" = @embedFile("Maps/1-5.map");
+    pub var @"1-6" = @embedFile("Maps/1-6.map");
+    pub var @"1-7" = @embedFile("Maps/1-7.map");
+    pub var @"1-8" = @embedFile("Maps/1-8.map");
+    pub var @"1-9" = @embedFile("Maps/1-9.map");
     pub var @"1" = @embedFile("Maps/1.map");
 };
 
@@ -48,6 +58,9 @@ pub const textures = struct {
 
     // skyboxes
     pub var skybox_city = @embedFile("Textures/Skyboxes/city.webp");
+    pub var skybox_bsides_0 = @embedFile("Textures/Skyboxes/bsides_0.webp");
+    pub var skybox_bsides_1 = @embedFile("Textures/Skyboxes/bsides_1.webp");
+    pub var skybox_bsides_2 = @embedFile("Textures/Skyboxes/bsides_2.webp");
 
     // sprites
     pub var bubble = @embedFile("Sprites/bubble.webp");

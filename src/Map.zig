@@ -10,9 +10,10 @@ const assets = @import("assets");
 const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
 const World = @import("World.zig");
+const Actor = @import("actors/Actor.zig");
 const Solid = @import("actors/Solid.zig");
-const Snow = @import("actors/Snow.zig");
-const Skybox = @import("Skybox.zig");
+const Player = @import("actors/Player.zig");
+const Checkpoint = @import("actors/Checkpoint.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -23,38 +24,48 @@ const BoundingBox = struct {
     max: Vec3,
 };
 
-pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
-    // maps.findByName(name) // TODO
-    const map = assets.maps.@"1";
+quake_map: QuakeMap,
+skybox: []const u8,
+snow_amount: f32,
+snow_wind: Vec3,
+music: []const u8,
+ambience: []const u8,
 
+pub fn init(allocator: std.mem.Allocator, name: []const u8, data: []const u8) !Map {
     var error_info: QuakeMap.ErrorInfo = undefined;
-    const quake_map = QuakeMap.read(allocator, map, &error_info) catch |err| {
+    const quake_map = QuakeMap.read(allocator, data, &error_info) catch |err| {
         logger.err("\"{s}.map\" {} in line {}", .{ name, err, error_info.line_number });
-        return error.QuakeMapRead;
+        return error.QuakeMapReadFailed;
     };
 
-    // TODO: move to World constructor
-    const skybox_name = try quake_map.worldspawn.getStringProperty("skybox");
-    world.skybox = Skybox.load(try std.mem.concat(allocator, u8, &.{ "skybox_", skybox_name }));
+    const skybox = quake_map.worldspawn.getStringProperty("skybox") catch "city";
     const snow_amount = quake_map.worldspawn.getFloatProperty("snowAmount") catch 1;
     const snow_wind = quake_map.worldspawn.getVec3Property("snowDirection") catch Vec3.new(0, 0, -1);
+    const music = quake_map.worldspawn.getStringProperty("music") catch "";
+    const ambience = quake_map.worldspawn.getStringProperty("ambience") catch "";
 
-    if (snow_amount > 0) {
-        const snow = try Snow.create(allocator, snow_amount, snow_wind);
-        try world.actors.append(snow);
-    }
+    return .{
+        .quake_map = quake_map,
+        .skybox = skybox,
+        .snow_amount = snow_amount,
+        .snow_wind = snow_wind,
+        .music = music,
+        .ambience = ambience,
+    };
+}
 
-    const solid = try World.Actor.create(World.Solid, allocator);
-    try generateSolid(allocator, solid, quake_map.worldspawn.solids.items);
+pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
+    const solid = try Actor.create(Solid, allocator);
+    try generateSolid(allocator, solid, self.quake_map.worldspawn.solids.items);
     try world.solids.append(solid);
     try world.actors.append(&solid.actor);
 
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
-    for (quake_map.entities.items) |entity| {
+    for (self.quake_map.entities.items) |entity| {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
-            const floating_decoration = try World.Actor.create(World.FloatingDecoration, allocator);
+            const floating_decoration = try Actor.create(World.FloatingDecoration, allocator);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
             floating_decoration.rate = 0.25 * (1.0 + 2.0 * world.rng.float(f32));
             floating_decoration.offset = world.rng.float(f32) * std.math.tau;
@@ -63,7 +74,7 @@ pub fn load(allocator: Allocator, world: *World, name: []const u8) !void {
             try loadActor(allocator, world, entity);
         }
     }
-    const decoration_solid = try World.Actor.create(World.Solid, allocator);
+    const decoration_solid = try Actor.create(Solid, allocator);
     decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
     try world.actors.append(&decoration_solid.actor);
 }
@@ -72,20 +83,21 @@ const start_checkpoint = "Start";
 
 fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void {
     if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
-        const name = try entity.getStringProperty("name");
+        const name = entity.getStringProperty("name") catch start_checkpoint;
 
         const spawns_player = std.mem.eql(u8, world.entry.checkpoint, name) or
             (std.mem.eql(u8, world.entry.checkpoint, "") and std.mem.eql(u8, name, start_checkpoint));
         // TODO: check if world.entry.checkpoint doesn't exist
 
         if (spawns_player) {
-            var player = try World.Actor.create(World.Player, allocator);
+            var player = try Actor.create(Player, allocator);
             try handleActorCreation(world, entity, &player.actor);
+            logger.info("player pos {d:.2} {d:.2} {d:.2}", .{player.actor.position.x(), player.actor.position.y(), player.actor.position.z()});
             world.player = player;
         }
 
         if (!std.mem.eql(u8, name, start_checkpoint)) {
-            var checkpoint = try World.Checkpoint.create(allocator, name);
+            var checkpoint = try Checkpoint.create(allocator, name);
             try handleActorCreation(world, entity, &checkpoint.actor);
         }
     } else if (try createActor(allocator, entity)) |actor| {
@@ -93,21 +105,21 @@ fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void
     }
 }
 
-fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *World.Actor) !void {
+fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !void {
     if (entity.hasProperty("origin")) actor.position = try entity.getVec3Property("origin");
     if (entity.hasProperty("angle")) actor.angle = try entity.getFloatProperty("angle");
     try world.actors.append(actor);
 }
 
-fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
+fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
-        const strawberry = try World.Actor.create(World.Strawberry, allocator);
+        const strawberry = try Actor.create(World.Strawberry, allocator);
         return &strawberry.actor;
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
-        var granny = try World.Actor.create(World.Granny, allocator);
+        var granny = try Actor.create(World.Granny, allocator);
         return &granny.actor;
     } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
-        const static_prop = try World.Actor.create(World.StaticProp, allocator);
+        const static_prop = try Actor.create(World.StaticProp, allocator);
         const model_path = try entity.getStringProperty("model");
         static_prop.model = models.findByName(modelNameFromPath(model_path));
         return &static_prop.actor;
@@ -116,7 +128,7 @@ fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*World.Actor {
     }
 }
 
-fn generateSolid(allocator: Allocator, into: *World.Solid, solids: []const QuakeMap.Solid) !void {
+fn generateSolid(allocator: Allocator, into: *Solid, solids: []const QuakeMap.Solid) !void {
     into.model = try Model.fromSolids(allocator, solids);
     into.vertices = std.ArrayList(Vec3).init(allocator);
     into.faces = std.ArrayList(Solid.Face).init(allocator);

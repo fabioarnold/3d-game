@@ -19,7 +19,7 @@ amount: f32,
 direction: Vec3,
 
 pub fn create(allocator: std.mem.Allocator, amount: f32, direction: Vec3) !*Actor {
-    const dust = try World.Actor.create(Snow, allocator);
+    const dust = try Actor.create(Snow, allocator);
     dust.amount = amount;
     dust.direction = direction;
     return &dust.actor;

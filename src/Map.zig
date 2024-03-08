@@ -14,6 +14,7 @@ const Actor = @import("actors/Actor.zig");
 const Solid = @import("actors/Solid.zig");
 const Player = @import("actors/Player.zig");
 const Checkpoint = @import("actors/Checkpoint.zig");
+const Cassette = @import("actors/Cassette.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -114,6 +115,9 @@ fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
         const strawberry = try Actor.create(World.Strawberry, world);
         return &strawberry.actor;
+    } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
+        const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");
+        return &cassette.actor;
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
         var granny = try Actor.create(World.Granny, world);
         return &granny.actor;

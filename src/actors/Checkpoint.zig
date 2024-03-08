@@ -42,6 +42,7 @@ pub fn create(world: *World, name: []const u8) !*Checkpoint {
     self.name = name;
     // if we're the spawn checkpoint, shift us so the player isn't on top
     if (self.isCurrent()) {
+        // TODO: move this to an onAdded function (overwritten by entity.origin)
         self.actor.position.yMut().* -= 8 * 5;
     }
     return self;

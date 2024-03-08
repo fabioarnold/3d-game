@@ -17,6 +17,7 @@ const textures = @import("../textures.zig");
 const Game = @import("../Game.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
+const Cassette = @import("Cassette.zig");
 const Dust = @import("Dust.zig");
 const models = @import("../models.zig");
 const Model = @import("../Model.zig");
@@ -203,6 +204,8 @@ const color_two_dashes = [_]f32{ @as(comptime_float, 0xfa) / 255.0, @as(comptime
 const color_refill_flash = [_]f32{ 1, 1, 1, 1 };
 const color_feather = [_]f32{ @as(comptime_float, 0xf2) / 255.0, @as(comptime_float, 0xd4) / 255.0, @as(comptime_float, 0x50) / 255.0, 1 };
 
+const CameraOverride = struct { position: Vec3, look_at: Vec3 };
+
 actor: Actor,
 
 dead: bool = false,
@@ -225,6 +228,9 @@ target_facing: Vec2 = Vec2.new(0, 1),
 camera_target_forward: Vec3 = Vec3.new(0, 1, 0),
 camera_target_distance: f32 = 0.5,
 state_machine: StateMachine(Player, State),
+
+camera_override: ?CameraOverride = null,
+camera_origin_pos: Vec3 = Vec3.zero(),
 
 t_coyote: f32 = 0,
 coyote_z: f32 = 0,
@@ -266,6 +272,9 @@ climb_corner_camera_from: ?Vec2 = null,
 climb_corner_camera_to: ?Vec2 = null,
 climb_input_sign: f32 = 1,
 t_climb_cooldown: f32 = 0,
+
+// cassette state
+cassette: ?*Cassette = null,
 
 fn solidWaistTestPos(self: Player) Vec3 {
     return self.actor.position.add(Vec3.new(0, 0, 3 * 5));
@@ -776,6 +785,10 @@ fn ceilingCheck(self: *Player) ?Vec3 {
         return hit.point.sub(self.actor.position.add(Vec3.new(0, 0, height)));
     }
     return null;
+}
+
+pub fn stop(self: *Player) void {
+    self.velocity = Vec3.zero();
 }
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
@@ -1415,5 +1428,20 @@ fn stDeadUpdate(self: *Player) void {
             .scene = World.create(world.allocator, entry) catch unreachable,
             // .to_black = AngledWipe(),
         });
+    }
+}
+
+pub fn enterCassette(self: *Player, it: *Cassette) void {
+    if (self.state_machine.state != .cassette) {
+        self.cassette = it;
+        self.state_machine.state = .cassette;
+        self.actor.position = it.actor.position.sub(Vec3.new(0, 0, 3 * 5));
+        self.draw_model = false;
+        self.draw_hair = false;
+        self.actor.cast_point_shadow.?.alpha = 0;
+        self.camera_override = .{ .position = self.actor.world.camera.position, .look_at = it.actor.position };
+        // game.instance.ambience.stop();
+        // audio.stop_bus(sfx.bus_gameplay_world, false);
+        // audio.play(sfx.sfx_cassette_enter, position);
     }
 }

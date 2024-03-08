@@ -16,7 +16,8 @@ const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
 const Camera = @import("Camera.zig");
 const World = @import("World.zig");
-const world = &World.world;
+const Game = @import("Game.zig");
+const game = &Game.game;
 pub const std_options = .{
     .log_level = .info,
     .logFn = wasm.log,
@@ -40,10 +41,12 @@ var loaded: bool = false; // all textures are loaded
 
 export fn onLoadImages() void {
     textures.load();
+
+    SpriteRenderer.init(allocator);
+    shaders.load();
     models.load(allocator) catch unreachable;
     primitives.load();
     maps.load(allocator) catch unreachable;
-    world.* = World.init(allocator);
 }
 
 export fn onImagesLoaded() void {
@@ -56,16 +59,15 @@ export fn onImagesLoaded() void {
 
     textures.updateParameters();
 
-    SpriteRenderer.init(allocator);
-    shaders.load();
-    world.load(.{
+    game.scene = World.create(allocator, .{
         .map = "1",
         .checkpoint = "",
         .submap = false,
         .reason = .entered,
     }) catch unreachable;
-    world.camera.position = state.camera.position;
-    world.camera.angles = state.camera.angles;
+
+    // world.camera.position = state.camera.position;
+    // world.camera.angles = state.camera.angles;
     // world.player.actor.position = state.player_position;
 }
 
@@ -81,8 +83,8 @@ export fn onLoadSnapshot(handle: wasm.String.Handle) void {
 }
 
 export fn onSaveSnapshot() wasm.String.Handle {
-    state.camera = world.camera;
-    state.player_position = world.player.actor.position;
+    state.camera = game.scene.camera;
+    state.player_position = game.scene.player.actor.position;
 
     var array = std.ArrayList(u8).init(allocator);
     std.json.stringify(state, .{}, array.writer()) catch |e| {
@@ -98,7 +100,6 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     video_height = @floatFromInt(h);
     video_scale = s;
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
-    world.camera.aspect_ratio = video_width / video_height;
 }
 
 export fn onMouseMove(x: c_int, y: c_int) void {
@@ -124,7 +125,8 @@ export fn onAnimationFrame() void {
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
-    world.camera.rotateView(mrx, mry);
+    game.scene.camera.aspect_ratio = video_width / video_height;
+    game.scene.camera.rotateView(mrx, mry);
     mrx = 0;
     mry = 0;
 
@@ -145,15 +147,15 @@ export fn onAnimationFrame() void {
     controls.dash.pressed = !dash_last_down and controls.dash.down;
     dash_last_down = controls.dash.down;
 
-    world.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
-    const x = Quat.fromAxis(world.camera.angles.x(), Vec3.new(1, 0, 0));
-    const y = Quat.fromAxis(world.camera.angles.y(), Vec3.new(0, 0, -1));
+    game.scene.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
+    const x = Quat.fromAxis(game.scene.camera.angles.x(), Vec3.new(1, 0, 0));
+    const y = Quat.fromAxis(game.scene.camera.angles.y(), Vec3.new(0, 0, -1));
     const orientation = y.mul(x);
     const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
 
-    world.update();
+    game.update();
 
-    world.camera.position = world.player.actor.position.add(cam_forward.scale(-300));
+    game.scene.camera.position = game.scene.player.actor.position.add(cam_forward.scale(-300));
 
-    world.draw(world.camera);
+    game.scene.draw(game.scene.camera);
 }

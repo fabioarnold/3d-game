@@ -27,8 +27,6 @@ const logger = std.log.scoped(.world);
 
 const World = @This();
 
-pub var world: World = undefined;
-
 pub const FloatingDecoration = struct {
     actor: Actor,
     model: Map.Model,
@@ -117,11 +115,11 @@ sprites: std.ArrayList(Sprite),
 player: *Player,
 skybox: Skybox,
 
-var prng: std.rand.DefaultPrng = undefined;
+var prng: std.rand.DefaultPrng = std.rand.DefaultPrng.init(0);
 
-pub fn init(allocator: Allocator) World {
-    prng = std.rand.DefaultPrng.init(0);
-    return .{
+pub fn create(allocator: Allocator, entry: EntryInfo) !*World {
+    var world = try allocator.create(World);
+    world.* = .{
         .allocator = allocator,
         .rng = prng.random(),
         .entry = undefined,
@@ -133,11 +131,11 @@ pub fn init(allocator: Allocator) World {
         .player = undefined,
         .skybox = undefined,
     };
+    try world.load(entry);
+    return world;
 }
 
-pub fn load(self: *World, entry: EntryInfo) !void {
-    self.clear();
-
+fn load(self: *World, entry: EntryInfo) !void {
     self.entry = entry;
 
     const map = maps.findByName(entry.map);
@@ -145,8 +143,8 @@ pub fn load(self: *World, entry: EntryInfo) !void {
     // environment
     {
         if (map.snow_amount > 0) {
-            const snow = try Snow.create(self.allocator, map.snow_amount, map.snow_wind);
-            try self.actors.append(snow);
+            const snow = try Snow.create(self, map.snow_amount, map.snow_wind);
+            self.add(snow);
         }
 
         if (map.skybox.len > 0) {
@@ -165,15 +163,15 @@ pub fn load(self: *World, entry: EntryInfo) !void {
     try map.load(self.allocator, self);
 }
 
-fn clear(self: *World) void {
+pub fn deinit(self: *World) void {
     for (self.actors.items) |actor| {
         actor.deinit(self.allocator);
     }
-    self.actors.clearRetainingCapacity();
-    self.adding.clearRetainingCapacity();
-    self.destroying.clearRetainingCapacity();
-    self.solids.clearRetainingCapacity();
-    self.sprites.clearRetainingCapacity();
+    self.actors.deinit();
+    self.adding.deinit();
+    self.destroying.deinit();
+    self.solids.deinit();
+    self.sprites.deinit();
 }
 
 pub fn add(self: *World, actor: *Actor) void {

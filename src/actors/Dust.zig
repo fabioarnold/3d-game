@@ -10,8 +10,6 @@ const Model = @import("../Model.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
 
-const world = &World.world;
-
 const Dust = @This();
 
 const images = [5][]const u8{ "dust_0", "dust_1", "dust_2", "dust_3", "dust_4" };
@@ -27,9 +25,9 @@ pub fn init(actor: *Actor) void {
     const self = @fieldParentPtr(Dust, "actor", actor);
     self.* = .{
         .actor = actor.*,
-        .image = textures.findByName(images[world.rng.uintLessThan(usize, images.len)]),
+        .image = textures.findByName(images[actor.world.rng.uintLessThan(usize, images.len)]),
         .color = undefined,
-        .duration = 0.5 + 0.5 * world.rng.float(f32),
+        .duration = 0.5 + 0.5 * actor.world.rng.float(f32),
     };
 }
 
@@ -37,8 +35,8 @@ const CreateOptions = struct {
     color: [4]f32 = [4]f32{ 0.7, 0.75, 0.8, 1 },
 };
 
-pub fn create(allocator: std.mem.Allocator, position: Vec3, velocity: Vec3, options: CreateOptions) !*Actor {
-    const dust = try Actor.create(Dust, allocator);
+pub fn create(world: *World, position: Vec3, velocity: Vec3, options: CreateOptions) !*Actor {
+    const dust = try Actor.create(Dust, world);
     dust.actor.position = position;
     dust.velocity = velocity;
     dust.color = options.color;
@@ -58,12 +56,12 @@ pub fn update(actor: *Actor) void {
     self.percent += time.delta / self.duration;
     if (self.percent >= 1) {
         self.percent = 1;
-        world.destroy(actor);
+        actor.world.destroy(actor);
     }
 }
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     _ = si;
     const self = @fieldParentPtr(Dust, "actor", actor);
-    world.drawSprite(Sprite.createBillboard(world, actor.position, self.image, 5 * 4 * (1.0 - self.percent), self.color, false));
+    actor.world.drawSprite(Sprite.createBillboard(actor.world, actor.position, self.image, 5 * 4 * (1.0 - self.percent), self.color, false));
 }

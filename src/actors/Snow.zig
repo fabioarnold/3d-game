@@ -6,11 +6,9 @@ const time = @import("../time.zig");
 const textures = @import("../textures.zig");
 const Model = @import("../Model.zig");
 const Sprite = @import("../Sprite.zig");
-const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
+const World = @import("../World.zig");
 const logger = std.log.scoped(.snow);
-
-const world = &World.world;
 
 const Snow = @This();
 
@@ -18,8 +16,8 @@ actor: Actor,
 amount: f32,
 direction: Vec3,
 
-pub fn create(allocator: std.mem.Allocator, amount: f32, direction: Vec3) !*Actor {
-    const dust = try Actor.create(Snow, allocator);
+pub fn create(world: *World, amount: f32, direction: Vec3) !*Actor {
+    const dust = try Actor.create(Snow, world);
     dust.amount = amount;
     dust.direction = direction;
     return &dust.actor;
@@ -31,8 +29,8 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
 
     const texture = textures.findByName("circle");
 
-    const camera_position = world.camera.position;
-    const camera_normal = world.camera.forward();
+    const camera_position = actor.world.camera.position;
+    const camera_normal = actor.world.camera.forward();
 
     // TODO: compute bounds of camera frustum
     const box_center = camera_position.add(camera_normal.scale(300 * 5));
@@ -94,8 +92,8 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
                         y + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.y() * 5, area),
                         z + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.z() * 5, area),
                     );
-                    const sprite = Sprite.createBillboard(world, pos, texture, 0.5 * 5, color, false);
-                    world.drawSprite(sprite);
+                    const sprite = Sprite.createBillboard(actor.world, pos, texture, 0.5 * 5, color, false);
+                    actor.world.drawSprite(sprite);
                 }
             }
         }

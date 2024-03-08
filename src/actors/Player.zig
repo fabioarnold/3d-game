@@ -24,7 +24,6 @@ const SkinnedModel = @import("../SkinnedModel.zig");
 const logger = std.log.scoped(.player);
 
 const game = &Game.game;
-const world = &World.world;
 
 const Player = @This();
 
@@ -312,8 +311,8 @@ pub fn init(actor: *Actor) void {
     self.setHairColor(color_normal);
 }
 
-fn relativeMoveInput() Vec2 {
-    const rot_y = Quat.fromAxis(world.camera.angles.y(), Vec3.new(0, 0, -1));
+fn relativeMoveInput(self: *const Player) Vec2 {
+    const rot_y = Quat.fromAxis(self.actor.world.camera.angles.y(), Vec3.new(0, 0, -1));
     const cam_move = rot_y.rotateVec(Vec3.new(controls.move.x(), controls.move.y(), 0));
     return Vec2.new(cam_move.x(), cam_move.y());
 }
@@ -389,7 +388,7 @@ pub fn update(actor: *Actor) void {
 
     // pickups
     if (self.isAbleToPickup()) {
-        for (world.actors.items) |pickup_actor| {
+        for (actor.world.actors.items) |pickup_actor| {
             if (pickup_actor.pickup) |pickup| {
                 const diff = self.solidWaistTestPos().sub(pickup_actor.position);
                 if (diff.dot(diff) < pickup.radius * pickup.radius) {
@@ -404,17 +403,20 @@ pub fn update(actor: *Actor) void {
 }
 
 fn lateUpdate(self: *Player) void {
+    const actor = &self.actor;
+    const world = actor.world;
+
     // ground checks
     {
         const prev_on_ground = self.on_ground;
         var result = self.groundCheck();
         if (result) |r| {
-            self.actor.position = self.actor.position.add(r.pushout);
+            actor.position = actor.position.add(r.pushout);
         } else if (self.t_ground_snap_cooldown <= 0 and prev_on_ground) {
             // ground snap
-            if (world.solidRayCast(self.actor.position, Vec3.new(0, 0, -1), 5 * 5, .{})) |hit| {
+            if (world.solidRayCast(actor.position, Vec3.new(0, 0, -1), 5 * 5, .{})) |hit| {
                 if (floorNormalCheck(hit.normal)) {
-                    self.actor.position = hit.point;
+                    actor.position = hit.point;
                     result = self.groundCheck();
                 }
             }
@@ -425,7 +427,7 @@ fn lateUpdate(self: *Player) void {
             self.auto_jump = false;
             self.ground_normal = r.normal;
             self.t_coyote = coyote_time;
-            self.coyote_z = self.actor.position.z();
+            self.coyote_z = actor.position.z();
             if (self.t_dash_reset_cooldown <= 0) {
                 self.refillDash(1);
             }
@@ -439,14 +441,14 @@ fn lateUpdate(self: *Player) void {
             // stateMachine.CallEvent(Events.Land); TODO: figure out what this is doing
 
             if (!game.isMidTransition() and !self.inBubble()) {
-                // audio.play(.sfx_land, self.actor.position);
+                // audio.play(.sfx_land, actor.position);
                 for (0..16) |i| {
                     const angle: f32 = 360.0 * @as(f32, @floatFromInt(i)) / 16.0;
                     const dir = math.dirFromAngle(angle);
                     const dir3 = Vec3.new(dir.x(), dir.y(), 0);
-                    const pos = self.actor.position.add(dir3.scale(4 * 5));
+                    const pos = actor.position.add(dir3.scale(4 * 5));
                     const vel = dir3.scale(50 * 5);
-                    const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+                    const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
                     world.add(dust_actor);
                 }
             }
@@ -459,8 +461,8 @@ fn lateUpdate(self: *Player) void {
         self.model_scale.yMut().* = math.approach(self.model_scale.y(), 1, time.delta / 0.8);
         self.model_scale.zMut().* = math.approach(self.model_scale.z(), 1, time.delta / 0.8);
 
-        self.actor.angle = math.approachAngle(
-            self.actor.angle,
+        actor.angle = math.approachAngle(
+            actor.angle,
             math.angleFromDir(self.target_facing),
             2 * 360 * time.delta,
         );
@@ -490,13 +492,13 @@ fn lateUpdate(self: *Player) void {
         for (gltf_data.nodes.items, 0..) |node, i| {
             if (std.mem.eql(u8, node.name, "Head")) {
                 hair_matrix = self.skinned_model.global_transforms[i];
-                hair_matrix = self.actor.getTransform()
+                hair_matrix = actor.getTransform()
                     .mul(Mat4.fromScale(self.model_scale.scale(3)))
                     .mul(z_up).mul(hair_matrix);
                 break;
             }
         }
-        const dir = math.dirFromAngle(self.actor.angle);
+        const dir = math.dirFromAngle(actor.angle);
         self.hair.forward = Vec3.new(-dir.x(), -dir.y(), 0);
         self.hair.squish = self.model_scale;
         self.hair.update(hair_matrix);
@@ -515,7 +517,7 @@ fn jump(self: *Player) void {
     self.t_coyote = 0;
     self.auto_jump = false;
 
-    var input = relativeMoveInput();
+    var input = self.relativeMoveInput();
     if (!input.eql(Vec2.zero())) {
         input = input.norm();
         self.target_facing = input;
@@ -569,7 +571,8 @@ fn skidJump(self: *Player) void {
         const dir3 = Vec3.new(dir.x(), dir.y(), 0);
         const pos = self.actor.position.add(dir3.scale(8 * 5));
         const vel = Vec3.new(vel_xy.x() * 0.5, vel_xy.y() * 0.5, 10 * 5).sub(dir3.scale(50 * 5));
-        const dust_actor = Dust.create(world.allocator, pos, vel, .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        const world = self.actor.world;
+        const dust_actor = Dust.create(world, pos, vel, .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
         world.add(dust_actor);
     }
 
@@ -588,7 +591,7 @@ fn dashJump(self: *Player) void {
     self.dashes = 1;
 
     if (dash_jump_xy_boost != 0) {
-        var input = relativeMoveInput();
+        var input = self.relativeMoveInput();
         if (!input.eql(Vec2.zero())) {
             input = input.norm();
             self.target_facing = input;
@@ -642,7 +645,7 @@ fn popout(self: *Player, resolve_impact: bool) bool {
 
     // wall test
     for ([_]Vec3{ self.solidWaistTestPos(), self.solidHeadTestPos() }) |test_pos| {
-        if (world.solidWallCheckNearest(test_pos, wall_pushout_dist)) |hit| {
+        if (self.actor.world.solidWallCheckNearest(test_pos, wall_pushout_dist)) |hit| {
             self.actor.position = self.actor.position.add(hit.pushout);
             if (resolve_impact) {
                 const dot = @min(0, self.velocity.norm().dot(hit.normal));
@@ -687,8 +690,8 @@ fn kill(self: *Player) void {
 
 fn climbCheckAt(self: Player, offset: Vec3) ?World.WallHit {
     const dir = Vec3.new(-self.target_facing.x(), -self.target_facing.y(), 0);
-    if (world.solidWallCheckClosestToNormal(self.solidWaistTestPos().add(offset), climb_check_dist, dir)) |hit| {
-        const rel_input = relativeMoveInput();
+    if (self.actor.world.solidWallCheckClosestToNormal(self.solidWaistTestPos().add(offset), climb_check_dist, dir)) |hit| {
+        const rel_input = self.relativeMoveInput();
         const hit_normal_xy = hit.normal.toVec2();
         if (rel_input.eql(Vec2.zero()) or hit_normal_xy.dot(rel_input) <= -0.5 and climbNormalCheck(hit.normal)) {
             return hit;
@@ -732,7 +735,7 @@ fn floorNormalCheck(normal: Vec3) bool {
 
 fn wallJumpCheck(self: *Player) bool {
     if (controls.jump.pressed) {
-        if (world.solidWallCheckClosestToNormal(
+        if (self.actor.world.solidWallCheckClosestToNormal(
             self.solidWaistTestPos(),
             climb_check_dist,
             Vec3.new(-self.target_facing.x(), -self.target_facing.y(), 0),
@@ -755,7 +758,7 @@ const GroundCheckResult = struct {
 fn groundCheck(self: *Player) ?GroundCheckResult {
     const distance = 5 * 5;
     const point = self.actor.position.add(Vec3.new(0, 0, distance));
-    if (world.solidRayCast(point, Vec3.new(0, 0, -1), distance + 0.01, .{})) |hit| {
+    if (self.actor.world.solidRayCast(point, Vec3.new(0, 0, -1), distance + 0.01, .{})) |hit| {
         return .{
             .pushout = hit.point.sub(self.actor.position),
             .normal = hit.normal,
@@ -769,13 +772,14 @@ fn ceilingCheck(self: *Player) ?Vec3 {
     const height = 12 * 5;
 
     const point = self.actor.position.add(Vec3.new(0, 0, 1));
-    if (world.solidRayCast(point, Vec3.new(0, 0, 1), height - 1, .{})) |hit| {
+    if (self.actor.world.solidRayCast(point, Vec3.new(0, 0, 1), height - 1, .{})) |hit| {
         return hit.point.sub(self.actor.position.add(Vec3.new(0, 0, height)));
     }
     return null;
 }
 
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
+    const world = actor.world;
     const self = @fieldParentPtr(Player, "actor", actor);
     // debug: draw camera origin pos
     // if (world.debug_draw) {
@@ -838,6 +842,8 @@ fn stNormalExit(self: *Player) void {
 }
 
 fn stNormalUpdate(self: *Player) void {
+    const world = self.actor.world;
+
     // check for NPC interaction
     if (self.on_ground) {
         // TODO for (world.actors) etc.
@@ -873,7 +879,7 @@ fn stNormalUpdate(self: *Player) void {
                 max *= mag;
             }
 
-            var input = relativeMoveInput();
+            var input = self.relativeMoveInput();
 
             // TODO: slightly move away from ledges
 
@@ -913,19 +919,19 @@ fn stNormalUpdate(self: *Player) void {
             }
         } else {
             var accel: f32 = acceleration;
-            if (vel_xy.dot(vel_xy) >= max_speed * max_speed and vel_xy.norm().dot(relativeMoveInput().norm()) >= 0.7) {
+            if (vel_xy.dot(vel_xy) >= max_speed * max_speed and vel_xy.norm().dot(self.relativeMoveInput().norm()) >= 0.7) {
                 accel = past_max_decel;
 
-                const dot = Vec2.dot(relativeMoveInput().norm(), self.target_facing);
+                const dot = Vec2.dot(self.relativeMoveInput().norm(), self.target_facing);
                 accel *= math.clampedMap(dot, -1, 1, air_accel_mult_max, air_accel_mult_min);
             } else {
                 accel = acceleration;
 
-                const dot = Vec2.dot(relativeMoveInput().norm(), self.target_facing);
+                const dot = Vec2.dot(self.relativeMoveInput().norm(), self.target_facing);
                 accel *= math.clampedMap(dot, -1, 1, air_accel_mult_min, air_accel_mult_max);
             }
 
-            vel_xy = math.approachVec2(vel_xy, relativeMoveInput().scale(max_speed), accel * time.delta);
+            vel_xy = math.approachVec2(vel_xy, self.relativeMoveInput().scale(max_speed), accel * time.delta);
         }
 
         self.velocity = vel_xy.toVec3(self.velocity.z());
@@ -944,7 +950,7 @@ fn stNormalUpdate(self: *Player) void {
             const y = world.rng.float(f32) * 6 - 3;
             const pos = self.actor.position.add(Vec3.new(x, y, 0));
             const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
-            const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+            const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
             world.add(dust_actor);
         }
     } else {
@@ -1011,8 +1017,8 @@ fn tryDash(self: *Player) bool {
 }
 
 fn stDashingEnter(self: *Player) void {
-    if (!relativeMoveInput().eql(Vec2.zero()))
-        self.target_facing = relativeMoveInput();
+    if (!self.relativeMoveInput().eql(Vec2.zero()))
+        self.target_facing = self.relativeMoveInput();
     self.actor.angle = math.angleFromDir(self.target_facing);
 
     self.last_dash_hair_color = if (self.dashes <= 0) color_no_dash else color_normal;
@@ -1059,7 +1065,7 @@ fn stDashingUpdate(self: *Player) void {
     }
 
     if (!controls.move.eql(Vec2.zero()) and controls.move.dot(self.target_facing) >= -0.2) {
-        const angle = math.approachAngle(math.angleFromDir(self.target_facing), math.angleFromDir(relativeMoveInput()), dash_rotate_speed * time.delta);
+        const angle = math.approachAngle(math.angleFromDir(self.target_facing), math.angleFromDir(self.relativeMoveInput()), dash_rotate_speed * time.delta);
         self.target_facing = math.dirFromAngle(angle);
         self.setDashSpeed(self.target_facing);
     }
@@ -1099,7 +1105,8 @@ fn stSkiddingEnter(self: *Player) void {
     for (0..5) |i| {
         const dir = Vec3.new(self.target_facing.x(), self.target_facing.y(), 0);
         const pos = self.actor.position.add(dir.scale(@floatFromInt(i * 5)));
-        const dust_actor = Dust.create(world.allocator, pos, dir.scale(-50 * 5), .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        const world = self.actor.world;
+        const dust_actor = Dust.create(world, pos, dir.scale(-50 * 5), .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
         world.add(dust_actor);
     }
 }
@@ -1115,7 +1122,7 @@ fn stSkiddingUpdate(self: *Player) void {
     if (self.tryDash())
         return;
 
-    if (relativeMoveInput().length() < 0.2 or relativeMoveInput().dot(self.target_facing) < 0.7 or !self.on_ground) {
+    if (self.relativeMoveInput().length() < 0.2 or self.relativeMoveInput().dot(self.target_facing) < 0.7 or !self.on_ground) {
         //cancelling
         self.state_machine.setState(.normal);
         return;
@@ -1133,7 +1140,7 @@ fn stSkiddingUpdate(self: *Player) void {
 
         // acceleration
         const accel: f32 = if (dot_matches) skidding_accel else skidding_start_accel;
-        vel_xy = math.approachVec2(vel_xy, relativeMoveInput().scale(max_speed), accel * time.delta);
+        vel_xy = math.approachVec2(vel_xy, self.relativeMoveInput().scale(max_speed), accel * time.delta);
         self.velocity = vel_xy.toVec3(self.velocity.z());
 
         // reached target
@@ -1161,6 +1168,8 @@ fn stClimbingExit(self: *Player) void {
 }
 
 fn stClimbingUpdate(self: *Player) void {
+    const world = self.actor.world;
+
     if (!controls.climb.down) {
         // audio.play(sfx.sfx_let_go, position);
         self.state_machine.setState(.normal);
@@ -1232,7 +1241,7 @@ fn stClimbingUpdate(self: *Player) void {
                 if (time.onInterval(0.05)) {
                     const pos = self.actor.position.add(wall_up.scale(5).add(forward.scale(2)).scale(5));
                     const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
-                    const dust_actor = Dust.create(world.allocator, pos, vel, .{}) catch unreachable;
+                    const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
                     world.add(dust_actor);
                 }
                 wall_slide_sound_enabled = true;
@@ -1394,20 +1403,17 @@ fn stDeadEnter(self: *Player) void {
 fn stDeadUpdate(self: *Player) void {
     if (self.draw_orbs_ease < 1) {
         self.draw_orbs_ease += time.delta * 2.0;
-    } else {
-        // TODO: remove and use game transition
-        self.state_machine.setState(.respawn);
-        self.actor.position = Vec3.new(0, -400, 300);
-        self.dead = false;
     }
 
-    // TODO
-    // if (!game.isMidTransition() and self.draw_orbs_ease > 0.3) {
-    //     const entry = World.Entry{ .reason = .respawned };
-    //     game.goto(Transition{
-    //         .mode = transition.modes.replace,
-    //         .scene = World(entry),
-    //         .to_black = AngledWipe(),
-    //     });
-    // }
+    // TODO: defer world creation
+    if (!game.isMidTransition() and self.draw_orbs_ease > 0.3) {
+        const world = self.actor.world;
+        var entry = world.entry;
+        entry.reason = .respawned;
+        game.goto(.{
+            .mode = .replace,
+            .scene = World.create(world.allocator, entry) catch unreachable,
+            // .to_black = AngledWipe(),
+        });
+    }
 }

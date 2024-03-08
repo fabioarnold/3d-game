@@ -22,6 +22,7 @@ model: Map.Model,
 vertices: std.ArrayList(Vec3),
 faces: std.ArrayList(Face),
 
+// TODO: connect to Actor
 pub fn deinit(actor: *Actor) void {
     const self = @fieldParentPtr(Solid, "actor", actor);
     self.vertices.deinit();

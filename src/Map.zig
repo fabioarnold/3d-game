@@ -55,33 +55,33 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, data: []const u8) !M
 }
 
 pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
-    const solid = try Actor.create(Solid, allocator);
+    const solid = try Actor.create(Solid, world);
     try generateSolid(allocator, solid, self.quake_map.worldspawn.solids.items);
     try world.solids.append(solid);
-    try world.actors.append(&solid.actor);
+    world.add(&solid.actor);
 
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
     for (self.quake_map.entities.items) |entity| {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
-            const floating_decoration = try Actor.create(World.FloatingDecoration, allocator);
+            const floating_decoration = try Actor.create(World.FloatingDecoration, world);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
             floating_decoration.rate = 0.25 * (1.0 + 2.0 * world.rng.float(f32));
             floating_decoration.offset = world.rng.float(f32) * std.math.tau;
-            try world.actors.append(&floating_decoration.actor);
+            world.add(&floating_decoration.actor);
         } else {
-            try loadActor(allocator, world, entity);
+            try loadActor(world, entity);
         }
     }
-    const decoration_solid = try Actor.create(Solid, allocator);
+    const decoration_solid = try Actor.create(Solid, world);
     decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
-    try world.actors.append(&decoration_solid.actor);
+    world.add(&decoration_solid.actor);
 }
 
 const start_checkpoint = "Start";
 
-fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void {
+fn loadActor(world: *World, entity: QuakeMap.Entity) !void {
     if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
         const name = entity.getStringProperty("name") catch start_checkpoint;
 
@@ -90,17 +90,16 @@ fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void
         // TODO: check if world.entry.checkpoint doesn't exist
 
         if (spawns_player) {
-            var player = try Actor.create(Player, allocator);
+            var player = try Actor.create(Player, world);
             try handleActorCreation(world, entity, &player.actor);
-            logger.info("player pos {d:.2} {d:.2} {d:.2}", .{player.actor.position.x(), player.actor.position.y(), player.actor.position.z()});
             world.player = player;
         }
 
         if (!std.mem.eql(u8, name, start_checkpoint)) {
-            var checkpoint = try Checkpoint.create(allocator, name);
+            var checkpoint = try Checkpoint.create(world, name);
             try handleActorCreation(world, entity, &checkpoint.actor);
         }
-    } else if (try createActor(allocator, entity)) |actor| {
+    } else if (try createActor(world, entity)) |actor| {
         try handleActorCreation(world, entity, actor);
     }
 }
@@ -108,18 +107,18 @@ fn loadActor(allocator: Allocator, world: *World, entity: QuakeMap.Entity) !void
 fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !void {
     if (entity.hasProperty("origin")) actor.position = try entity.getVec3Property("origin");
     if (entity.hasProperty("angle")) actor.angle = try entity.getFloatProperty("angle");
-    try world.actors.append(actor);
+    world.add(actor);
 }
 
-fn createActor(allocator: Allocator, entity: QuakeMap.Entity) !?*Actor {
+fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
-        const strawberry = try Actor.create(World.Strawberry, allocator);
+        const strawberry = try Actor.create(World.Strawberry, world);
         return &strawberry.actor;
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
-        var granny = try Actor.create(World.Granny, allocator);
+        var granny = try Actor.create(World.Granny, world);
         return &granny.actor;
     } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
-        const static_prop = try Actor.create(World.StaticProp, allocator);
+        const static_prop = try Actor.create(World.StaticProp, world);
         const model_path = try entity.getStringProperty("model");
         static_prop.model = models.findByName(modelNameFromPath(model_path));
         return &static_prop.actor;

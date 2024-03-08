@@ -11,8 +11,6 @@ const SkinnedModel = @import("../SkinnedModel.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
 
-const world = &World.world;
-
 const Checkpoint = @This();
 
 const model_off = models.findByName("flag_off");
@@ -23,7 +21,7 @@ model_on: SkinnedModel,
 t_wiggle: f32 = 0,
 
 pub fn isCurrent(self: Checkpoint) bool {
-    return std.mem.eql(u8, world.entry.checkpoint, self.name);
+    return std.mem.eql(u8, self.actor.world.entry.checkpoint, self.name);
 }
 
 pub fn init(actor: *Actor) void {
@@ -39,8 +37,8 @@ pub fn init(actor: *Actor) void {
     self.actor.pickup = .{ .radius = 16 * 5 };
 }
 
-pub fn create(allocator: std.mem.Allocator, name: []const u8) !*Checkpoint {
-    const self = try Actor.create(Checkpoint, allocator);
+pub fn create(world: *World, name: []const u8) !*Checkpoint {
+    const self = try Actor.create(Checkpoint, world);
     self.name = name;
     // if we're the spawn checkpoint, shift us so the player isn't on top
     if (self.isCurrent()) {
@@ -62,8 +60,8 @@ pub fn onPickup(actor: *Actor) void {
     if (!self.isCurrent()) {
         // audio.play(.sfx_checkpoint, actor.position);
 
-        world.entry.checkpoint = self.name;
-        if (world.entry.submap) {
+        self.actor.world.entry.checkpoint = self.name;
+        if (self.actor.world.entry.submap) {
             // TODO
             // save.current.checkpoint = name;
         }
@@ -86,11 +84,11 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     const gradient_tex = textures.findByName("gradient");
     var gradient_color = halo_color;
     gradient_color[3] *= 0.4;
-    world.drawSprite(Sprite.createBillboard(world, halo_pos, gradient_tex, 12 * 5, gradient_color, false));
+    actor.world.drawSprite(Sprite.createBillboard(actor.world, halo_pos, gradient_tex, 12 * 5, gradient_color, false));
 
     if (self.t_wiggle > 0) {
         const ring_tex = textures.findByName("ring");
-        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, halo_color, true));
-        world.drawSprite(Sprite.createBillboard(world, halo_pos, ring_tex, self.t_wiggle * 50 * 5, halo_color, true));
+        actor.world.drawSprite(Sprite.createBillboard(actor.world, halo_pos, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, halo_color, true));
+        actor.world.drawSprite(Sprite.createBillboard(actor.world, halo_pos, ring_tex, self.t_wiggle * 50 * 5, halo_color, true));
     }
 }

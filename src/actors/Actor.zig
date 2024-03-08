@@ -4,6 +4,7 @@ const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
 const ShaderInfo = @import("../Model.zig").ShaderInfo;
+const World = @import("../World.zig");
 
 const Actor = @This();
 
@@ -14,6 +15,7 @@ const Pickup = struct {
     radius: f32,
 };
 
+world: *World,
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
 destroying: bool = false,
@@ -27,9 +29,10 @@ drawFn: *const fn (*Actor, ShaderInfo) void,
 cast_point_shadow: ?CastPointShadow = null,
 pickup: ?Pickup = null,
 
-pub fn create(comptime Derived: type, allocator: Allocator) !*Derived {
-    var derived = try allocator.create(Derived);
+pub fn create(comptime Derived: type, world: *World) !*Derived {
+    var derived = try world.allocator.create(Derived);
     derived.actor = .{
+        .world = world,
         .derived = derived,
         .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &noOp,
         .onPickupFn = if (@hasDecl(Derived, "onPickup")) &@field(Derived, "onPickup") else &noOp,

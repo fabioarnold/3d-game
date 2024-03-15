@@ -10,11 +10,11 @@ const gl = @import("web/webgl.zig");
 const Model = @This();
 
 pub const ShaderInfo = struct {
-    model_loc: gl.GLint,
-    joints_loc: gl.GLint,
-    blend_skin_loc: gl.GLint,
-    color_loc: gl.GLint,
-    effects_loc: gl.GLint,
+    model_loc: gl.GLint = 0,
+    joints_loc: gl.GLint = 0,
+    blend_skin_loc: gl.GLint = 0,
+    color_loc: gl.GLint = 0,
+    effects_loc: gl.GLint = 0,
 };
 
 gltf: zgltf,

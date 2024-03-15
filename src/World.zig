@@ -14,6 +14,7 @@ const models = @import("models.zig");
 const Model = @import("Model.zig");
 const ShaderInfo = Model.ShaderInfo;
 const SkinnedModel = @import("SkinnedModel.zig");
+const Target = @import("Target.zig");
 const Camera = @import("Camera.zig");
 const Skybox = @import("Skybox.zig");
 const Actor = @import("actors/Actor.zig");
@@ -381,8 +382,9 @@ pub fn drawSprites(self: *World) void {
     self.sprites.clearRetainingCapacity();
 }
 
-pub fn draw(self: *World, camera: Camera) void {
-    const view_projection = camera.projection().mul(camera.view());
+pub fn draw(self: *World, target: Target) void {
+    _ = target;
+    const view_projection = self.camera.projection().mul(self.camera.view());
 
     // skybox
     {
@@ -391,7 +393,7 @@ pub fn draw(self: *World, camera: Camera) void {
         gl.glDepthMask(gl.GL_FALSE);
         gl.glCullFace(gl.GL_FRONT);
         const mvp = view_projection
-            .mul(Mat4.fromTranslate(camera.position))
+            .mul(Mat4.fromTranslate(self.camera.position))
             .mul(Mat4.fromScale(Vec3.new(1, 1, 0.5)));
         self.skybox.draw(shaders.textured_unlit.mvp_loc, mvp, 300);
         gl.glCullFace(gl.GL_BACK);

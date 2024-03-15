@@ -7,7 +7,7 @@ const Quat = za.Quat;
 const Mat4 = za.Mat4;
 const zgltf = @import("zgltf");
 const math = @import("../math.zig");
-const easing = @import("../easing.zig");
+const easings = @import("../easings.zig");
 const time = @import("../time.zig");
 const controls = @import("../controls.zig");
 const gl = @import("../web/webgl.zig");
@@ -817,10 +817,10 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     if (self.draw_orbs and self.draw_orbs_ease > 0) {
         const ease = self.draw_orbs_ease;
         const col = if (@mod(@floor(ease * 10), 2) == 0) self.hair.color else color_white;
-        const s = if (ease < 0.5) (0.5 + ease) else (easing.outCubic(1 - (ease - 0.5) * 2));
+        const s = if (ease < 0.5) (0.5 + ease) else (easings.outCubic(1 - (ease - 0.5) * 2));
         for (0..8) |i| {
             const rot: f32 = (@as(f32, @floatFromInt(i)) / 8.0 + ease * 0.25) * std.math.tau;
-            const rad: f32 = easing.outCubic(ease) * 16 * 5;
+            const rad: f32 = easings.outCubic(ease) * 16 * 5;
             const pos = self.solidWaistTestPos()
                 .add(world.camera.left().scale(@cos(rot) * rad))
                 .add(world.camera.up().scale(@sin(rot) * rad));
@@ -1425,7 +1425,7 @@ fn stDeadUpdate(self: *Player) void {
         entry.reason = .respawned;
         game.goto(.{
             .mode = .replace,
-            .scene = World.create(world.allocator, entry) catch unreachable,
+            .scene = .{ .world = World.create(world.allocator, entry) catch unreachable },
             // .to_black = AngledWipe(),
         });
     }

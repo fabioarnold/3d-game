@@ -14,6 +14,7 @@ const shaders = @import("shaders.zig");
 const textures = @import("textures.zig");
 const SpriteRenderer = @import("SpriteRenderer.zig");
 const models = @import("models.zig");
+const Target = @import("Target.zig");
 const Camera = @import("Camera.zig");
 const World = @import("World.zig");
 const Game = @import("Game.zig");
@@ -59,12 +60,7 @@ export fn onImagesLoaded() void {
 
     textures.updateParameters();
 
-    game.scene = World.create(allocator, .{
-        .map = "1",
-        .checkpoint = "",
-        .submap = false,
-        .reason = .entered,
-    }) catch unreachable;
+    game.startup(allocator);
 
     // world.camera.position = state.camera.position;
     // world.camera.angles = state.camera.angles;
@@ -83,8 +79,8 @@ export fn onLoadSnapshot(handle: wasm.String.Handle) void {
 }
 
 export fn onSaveSnapshot() wasm.String.Handle {
-    state.camera = game.scene.camera;
-    state.player_position = game.scene.player.actor.position;
+    // state.camera = game.scene.camera;
+    // state.player_position = game.scene.player.actor.position;
 
     var array = std.ArrayList(u8).init(allocator);
     std.json.stringify(state, .{}, array.writer()) catch |e| {
@@ -125,8 +121,9 @@ export fn onAnimationFrame() void {
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
-    game.scene.camera.aspect_ratio = video_width / video_height;
-    game.scene.camera.rotateView(mrx, mry);
+    const target = Target{.width = video_width, .height = video_height};
+
+    // game.scene.camera.rotateView(mrx, mry);
     mrx = 0;
     mry = 0;
 
@@ -147,15 +144,15 @@ export fn onAnimationFrame() void {
     controls.dash.pressed = !dash_last_down and controls.dash.down;
     dash_last_down = controls.dash.down;
 
-    game.scene.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
-    const x = Quat.fromAxis(game.scene.camera.angles.x(), Vec3.new(1, 0, 0));
-    const y = Quat.fromAxis(game.scene.camera.angles.y(), Vec3.new(0, 0, -1));
-    const orientation = y.mul(x);
-    const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
+    // game.scene.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
+    // const x = Quat.fromAxis(game.scene.camera.angles.x(), Vec3.new(1, 0, 0));
+    // const y = Quat.fromAxis(game.scene.camera.angles.y(), Vec3.new(0, 0, -1));
+    // const orientation = y.mul(x);
+    // const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
 
     game.update();
 
-    game.scene.camera.position = game.scene.player.actor.position.add(cam_forward.scale(-300));
+    // game.scene.camera.position = game.scene.player.actor.position.add(cam_forward.scale(-300));
 
-    game.scene.draw(game.scene.camera);
+    game.draw(target);
 }

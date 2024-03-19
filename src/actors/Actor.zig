@@ -22,7 +22,9 @@ destroying: bool = false,
 
 derived: *anyopaque,
 deinitFn: *const fn (*Actor, Allocator) void,
+addedFn: *const fn (*Actor) void,
 updateFn: *const fn (*Actor) void,
+lateUpdateFn: *const fn (*Actor) void,
 onPickupFn: *const fn (*Actor) void,
 drawFn: *const fn (*Actor, ShaderInfo) void,
 
@@ -34,7 +36,9 @@ pub fn create(comptime Derived: type, world: *World) !*Derived {
     derived.actor = .{
         .world = world,
         .derived = derived,
+        .addedFn = if (@hasDecl(Derived, "added")) &@field(Derived, "added") else &noOp,
         .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &noOp,
+        .lateUpdateFn = if (@hasDecl(Derived, "lateUpdate")) &@field(Derived, "lateUpdate") else &noOp,
         .onPickupFn = if (@hasDecl(Derived, "onPickup")) &@field(Derived, "onPickup") else &noOp,
         .drawFn = &Derived.draw,
         .deinitFn = &struct {
@@ -62,8 +66,16 @@ pub fn getTransform(self: Actor) Mat4 {
 
 fn noOp(_: *Actor) void {}
 
+pub fn added(self: *Actor) void {
+    self.addedFn(self);
+}
+
 pub fn update(self: *Actor) void {
     self.updateFn(self);
+}
+
+pub fn lateUpdate(self: *Actor) void {
+    self.lateUpdateFn(self);
 }
 
 pub fn onPickup(self: *Actor) void {

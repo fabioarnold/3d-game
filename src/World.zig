@@ -124,6 +124,10 @@ fn resolveChanges(self: *World) void {
     for (self.adding.items) |actor| {
         self.actors.append(actor) catch unreachable;
     }
+    // notify they're being added
+    for (self.adding.items) |actor| {
+        actor.added();
+    }
     self.adding.clearRetainingCapacity();
 
     for (self.destroying.items) |actor| {
@@ -305,6 +309,9 @@ pub fn update(self: *World) void {
     self.resolveChanges();
     for (self.actors.items) |actor| {
         actor.update();
+    }
+    for (self.actors.items) |actor| {
+        actor.lateUpdate();
     }
 }
 

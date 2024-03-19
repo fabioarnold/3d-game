@@ -29,9 +29,7 @@ pub fn init(actor: *Actor) void {
     self.* = .{
         .actor = actor.*,
         .name = undefined, // set by create
-        .model_on = .{
-            .model = models.findByName("flag_on"),
-        },
+        .model_on = .{ .model = models.findByName("flag_on") },
     };
     self.model_on.play("Idle");
     self.actor.pickup = .{ .radius = 16 * 5 };
@@ -40,12 +38,15 @@ pub fn init(actor: *Actor) void {
 pub fn create(world: *World, name: []const u8) !*Checkpoint {
     const self = try Actor.create(Checkpoint, world);
     self.name = name;
+    return self;
+}
+
+pub fn added(actor: *Actor) void {
+    const self = @fieldParentPtr(Checkpoint, "actor", actor);
     // if we're the spawn checkpoint, shift us so the player isn't on top
     if (self.isCurrent()) {
-        // TODO: move this to an onAdded function (overwritten by entity.origin)
         self.actor.position.yMut().* -= 8 * 5;
     }
-    return self;
 }
 
 pub fn update(actor: *Actor) void {

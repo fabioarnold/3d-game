@@ -18,4 +18,4 @@ pub var move: Vec2 = Vec2.zero();
 pub var jump: ButtonState = .{};
 pub var climb: ButtonState = .{};
 pub var dash: ButtonState = .{};
-pub var confirm: ButtonState = .{};
+pub const confirm = &jump; // alias

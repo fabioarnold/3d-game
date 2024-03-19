@@ -80,7 +80,7 @@ pub fn draw(self: *Titlescreen, target: Target) void { // , target: Target
     var camera = Camera{
         .aspect_ratio = target.width / target.height,
         .position = Vec3.lerp(cam_from, cam_to, easings.outCubic(self.easing)),
-        // .look_at = Vec3.new(0, 0, 70),
+        .look_at = Vec3.new(0, 0, 70),
         .near_plane = 10,
         .far_plane = 300,
     };
@@ -105,9 +105,7 @@ pub fn draw(self: *Titlescreen, target: Target) void { // , target: Target
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, 53)))
         .mul(Mat4.fromScale(Vec3.new(10, 10, 10)));
 
-    const look_at = Vec3.new(0, 0, 70);
-    const view = Mat4.lookAt(camera.position, look_at, Vec3.new(0, 0, 1));
-    const view_projection = camera.projection().mul(view);
+    const view_projection = camera.projection().mul(camera.view());
     gl.glUseProgram(shaders.textured_skinned.shader);
     gl.glUniformMatrix4fv(shaders.textured_skinned.viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     const si = Model.ShaderInfo{

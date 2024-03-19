@@ -77,6 +77,11 @@ fn load(self: *World, entry: EntryInfo) !void {
 
     const map = maps.findByName(entry.map);
 
+    self.camera.near_plane = 20 * 5;
+    self.camera.far_plane = 800 * 5;
+
+    // TODO: pause menu
+
     // environment
     {
         if (map.snow_amount > 0) {
@@ -326,7 +331,7 @@ pub fn drawSprites(self: *World) void {
 }
 
 pub fn draw(self: *World, target: Target) void {
-    _ = target;
+    self.camera.aspect_ratio = target.width / target.height;
     const view_projection = self.camera.projection().mul(self.camera.view());
 
     // skybox

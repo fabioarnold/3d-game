@@ -92,6 +92,9 @@ const State = enum {
     cassette,
 };
 
+var stored_camera_forward: Vec3 = undefined;
+var stored_camera_distance: f32 = undefined;
+
 fn StateMachine(comptime I: type, S: type) type {
     return struct {
         const Self = @This();
@@ -320,6 +323,24 @@ pub fn init(actor: *Actor) void {
     self.setHairColor(color_normal);
 }
 
+pub fn added(actor: *Actor) void {
+    const self = @fieldParentPtr(Player, "actor", actor);
+    if (actor.world.entry.reason == .respawned) {
+        self.camera_target_forward = stored_camera_forward;
+        self.camera_target_distance = stored_camera_distance;
+        self.state_machine.setState(.respawn);
+    } else if (actor.world.entry.submap and actor.world.entry.reason == .entered) {
+        self.state_machine.setState(.strawberry_reveal);
+    } else {
+        self.state_machine.setState(.normal);
+    }
+
+    self.camera_origin_pos = actor.position;
+    const result = self.getCameraTarget();
+    actor.world.camera.look_at = result.camera_look_at;
+    actor.world.camera.position = result.camera_position;
+}
+
 fn relativeMoveInput(self: *const Player) Vec2 {
     const rot_y = Quat.fromAxis(self.actor.world.camera.angles.y(), Vec3.new(0, 0, -1));
     const cam_move = rot_y.rotateVec(Vec3.new(controls.move.x(), controls.move.y(), 0));
@@ -406,13 +427,10 @@ pub fn update(actor: *Actor) void {
             }
         }
     }
-
-    // TODO: move to world
-    self.lateUpdate();
 }
 
-fn lateUpdate(self: *Player) void {
-    const actor = &self.actor;
+pub fn lateUpdate(actor: *Actor) void {
+    const self = @fieldParentPtr(Player, "actor", actor);
     const world = actor.world;
 
     // ground checks
@@ -464,6 +482,49 @@ fn lateUpdate(self: *Player) void {
         }
     }
 
+    // update camera origin position
+    {
+        const zpad: f32 = if (self.state_machine.state == .climbing) 0 else 8 * 5;
+        self.camera_origin_pos.xMut().* = actor.position.x();
+        self.camera_origin_pos.yMut().* = actor.position.y();
+
+        var target_z: f32 = undefined;
+        if (self.on_ground) {
+            target_z = actor.position.z();
+        } else if (actor.position.z() < self.camera_origin_pos.z()) {
+            target_z = actor.position.z();
+        } else if (actor.position.z() > self.camera_origin_pos.z() + zpad) {
+            target_z = actor.position.z() - zpad;
+        } else {
+            target_z = self.camera_origin_pos.z();
+        }
+        if (self.camera_origin_pos.z() != target_z) {
+            self.camera_origin_pos.zMut().* += (target_z - self.camera_origin_pos.z()) *
+                (1 - std.math.pow(f32, 0.001, time.delta));
+        }
+    }
+
+    // update camera position
+    {
+        var look_at: Vec3 = undefined;
+        var position: Vec3 = undefined;
+        if (self.camera_override) |camera_override| {
+            look_at = camera_override.look_at;
+            position = camera_override.position;
+        } else {
+            const result = self.getCameraTarget();
+            look_at = result.camera_look_at;
+            position = result.camera_position;
+        }
+
+        world.camera.position = world.camera.position
+            .add(position.sub(world.camera.position)
+            .scale(1 - std.math.pow(f32, 0.01, time.delta)));
+        world.camera.look_at = look_at;
+
+        // TODO: fov
+    }
+
     // update model
     {
         self.model_scale.xMut().* = math.approach(self.model_scale.x(), 1, time.delta / 0.8);
@@ -512,6 +573,42 @@ fn lateUpdate(self: *Player) void {
         self.hair.squish = self.model_scale;
         self.hair.update(hair_matrix);
     }
+}
+
+const CameraTargetResult = struct {
+    camera_look_at: Vec3,
+    camera_position: Vec3,
+    snap_requested: bool = false,
+};
+
+fn getCameraTarget(self: *Player) CameraTargetResult {
+    const actor = &self.actor;
+    var result = CameraTargetResult{
+        .camera_look_at = self.camera_origin_pos.add(Vec3.new(0, 0, 12 * 5)),
+        .camera_position = self.camera_origin_pos
+            .sub(self.camera_target_forward.scale(math.lerp3(30, 60, 110, 110, self.camera_target_distance) * 5))
+            .add(Vec3.new(0, 0, math.lerp3(1, 30, 80, 180, self.camera_target_distance) * 5)),
+    };
+
+    // TODO: inside fixed camera zone
+    const from = result.camera_look_at;
+    const to = result.camera_position;
+    const normal = to.sub(from).norm();
+    // reduce distance by a bit to account for near plane cutoff
+    var distance = to.sub(from).length();
+    if (distance > actor.world.camera.near_plane + 1 * 5) {
+        distance -= actor.world.camera.near_plane;
+    }
+    if (actor.world.solidRayCast(from, normal, distance, .{})) |hit| {
+        if (hit.intersections % 2 == 1) {
+            result.snap_requested = true;
+            result.camera_position = hit.point;
+        }
+    }
+
+    // TODO: push down from ceilings a bit
+
+    return result;
 }
 
 fn cancelGroundSnap(self: *Player) void {
@@ -691,9 +788,9 @@ fn addPlatformVelocity(self: *Player, play_sound: bool) void {
 
 fn kill(self: *Player) void {
     self.state_machine.setState(.dead);
-    // storedCameraForward = cameraTargetForward;
-    // storedCameraDistance = cameraTargetDistance;
-    // Save.CurrentRecord.Deaths += 1;
+    stored_camera_forward = self.camera_target_forward;
+    stored_camera_distance = self.camera_target_distance;
+    // Save.CurrentRecord.Deaths += 1; // TODO
     self.dead = true;
 }
 

@@ -11,10 +11,14 @@ const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
 const World = @import("World.zig");
 const Actor = @import("actors/Actor.zig");
-const Solid = @import("actors/Solid.zig");
-const Player = @import("actors/Player.zig");
-const Checkpoint = @import("actors/Checkpoint.zig");
 const Cassette = @import("actors/Cassette.zig");
+const Checkpoint = @import("actors/Checkpoint.zig");
+const Granny = @import("actors/Granny.zig");
+const FloatingDecoration = @import("actors/FloatingDecoration.zig");
+const Player = @import("actors/Player.zig");
+const Solid = @import("actors/Solid.zig");
+const StaticProp = @import("actors/StaticProp.zig");
+const Strawberry = @import("actors/Strawberry.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -66,7 +70,7 @@ pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
-            const floating_decoration = try Actor.create(World.FloatingDecoration, world);
+            const floating_decoration = try Actor.create(FloatingDecoration, world);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
             floating_decoration.rate = 0.25 * (1.0 + 2.0 * world.rng.float(f32));
             floating_decoration.offset = world.rng.float(f32) * std.math.tau;
@@ -113,16 +117,16 @@ fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !v
 
 fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
-        const strawberry = try Actor.create(World.Strawberry, world);
+        const strawberry = try Actor.create(Strawberry, world);
         return &strawberry.actor;
     } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
         const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");
         return &cassette.actor;
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
-        var granny = try Actor.create(World.Granny, world);
+        var granny = try Actor.create(Granny, world);
         return &granny.actor;
     } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
-        const static_prop = try Actor.create(World.StaticProp, world);
+        const static_prop = try Actor.create(StaticProp, world);
         const model_path = try entity.getStringProperty("model");
         static_prop.model = models.findByName(modelNameFromPath(model_path));
         return &static_prop.actor;

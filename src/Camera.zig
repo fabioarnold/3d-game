@@ -22,31 +22,23 @@ pub fn projection(self: Camera) Mat4 {
     return za.perspective(self.field_of_view, self.aspect_ratio, self.near_plane, self.far_plane);
 }
 
-pub fn orientation(self: Camera) Quat {
-    const x = Quat.fromAxis(self.angles.x(), Vec3.new(1, 0, 0)); // yaw
-    const y = Quat.fromAxis(self.angles.y(), Vec3.new(0, -1, 0)); // pitch
-    const z = Quat.fromAxis(self.angles.z(), Vec3.new(0, 0, 1)); // roll
-    return y.mul(z.mul(x));
-}
-
 pub fn view(self: Camera) Mat4 {
     return Mat4.lookAt(self.position, self.look_at, Vec3.new(0, 0, 1));
 }
 
 pub fn left(self: Camera) Vec3 {
-    return Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1)).rotateVec(Vec3.new(-1, 0, 0));
+    const v = self.view();
+    return Vec3.new(-v.data[0][0], -v.data[1][0], -v.data[2][0]);
 }
 
 pub fn up(self: Camera) Vec3 {
-    const x = Quat.fromAxis(self.angles.x(), Vec3.new(1, 0, 0));
-    const y = Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1));
-    return y.mul(x).rotateVec(Vec3.new(0, 0, 1));
+    const v = self.view();
+    return Vec3.new(v.data[0][1], v.data[1][1], v.data[2][1]);
 }
 
 pub fn forward(self: Camera) Vec3 {
-    const x = Quat.fromAxis(self.angles.x(), Vec3.new(1, 0, 0));
-    const y = Quat.fromAxis(self.angles.y(), Vec3.new(0, 0, -1));
-    return y.mul(x).rotateVec(Vec3.new(0, 1, 0));
+    const v = self.view();
+    return Vec3.new(-v.data[0][2], -v.data[1][2], -v.data[2][2]);
 }
 
 pub fn rotateView(self: *Camera, dx: f32, dy: f32) void {

@@ -1523,7 +1523,7 @@ fn stDeadUpdate(self: *Player) void {
         game.goto(.{
             .mode = .replace,
             .scene = .{ .world = World.create(world.allocator, entry) catch unreachable },
-            // .to_black = AngledWipe(),
+            .to_black = Game.ScreenWipe.init(.angled),
         });
     }
 }

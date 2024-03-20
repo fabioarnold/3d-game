@@ -31,8 +31,6 @@
         isKeyDown,
       };
 
-      isButtonDown(0);
-
       fetchAndInstantiate("zig-out/bin/main.wasm", { env }).then((instance) => {
         memory = instance.exports.memory;
 

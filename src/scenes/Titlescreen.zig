@@ -61,7 +61,11 @@ pub fn update(self: *Titlescreen) void {
             .submap = false,
             .reason = .entered,
         }) catch unreachable;
-        game.goto(.{ .mode = .replace, .scene = .{ .world = world } });
+        game.goto(.{
+            .mode = .replace,
+            .scene = .{ .world = world },
+            .to_black = Game.ScreenWipe.init(.angled),
+        });
     }
 
     // if (controls.cancel.pressed) {
@@ -110,6 +114,8 @@ pub fn draw(self: *Titlescreen, target: Target) void { // , target: Target
     gl.glUniformMatrix4fv(shaders.textured_skinned.viewprojection_loc, 1, gl.GL_FALSE, &view_projection.data[0]);
     const si = Model.ShaderInfo{
         .model_loc = shaders.textured_skinned.model_loc,
+        .joints_loc = shaders.textured_skinned.joints_loc,
+        .blend_skin_loc = shaders.textured_skinned.blend_skin_loc,
         .color_loc = shaders.textured_skinned.color_loc,
         .effects_loc = shaders.textured_skinned.effects_loc,
     };

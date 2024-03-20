@@ -1,6 +1,11 @@
 const gl = @import("web/webgl.zig");
 const Vec3 = @import("zalgebra").Vec3;
 
+pub const unlit = struct {
+    pub var shader: gl.GLuint = undefined;
+    pub var mvp_loc: gl.GLint = undefined;
+};
+
 pub const textured_unlit = struct {
     pub var shader: gl.GLuint = undefined;
     pub var mvp_loc: gl.GLint = undefined;
@@ -35,6 +40,14 @@ fn loadShader(vert_src: []const u8, frag_src: []const u8, attribs: []const []con
 }
 
 pub fn load() void {
+    unlit.shader = loadShader(
+        @embedFile("shaders/transform_pc.vert"),
+        @embedFile("shaders/unlit.frag"),
+        &.{"a_position", "a_color"},
+    );
+    gl.glUseProgram(unlit.shader);
+    unlit.mvp_loc = gl.glGetUniformLocation(unlit.shader, "u_mvp");
+
     textured_unlit.shader = loadShader(
         @embedFile("shaders/transform_pt.vert"),
         @embedFile("shaders/textured_unlit.frag"),

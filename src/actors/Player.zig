@@ -14,6 +14,7 @@ const gl = @import("../web/webgl.zig");
 const primitives = @import("../primitives.zig");
 const Sprite = @import("../Sprite.zig");
 const textures = @import("../textures.zig");
+const ScreenWipe = @import("../screenwipes.zig").ScreenWipe;
 const Game = @import("../Game.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
@@ -1523,7 +1524,7 @@ fn stDeadUpdate(self: *Player) void {
         game.goto(.{
             .mode = .replace,
             .scene = .{ .world = World.create(world.allocator, entry) catch unreachable },
-            .to_black = Game.ScreenWipe.init(.angled),
+            .to_black = ScreenWipe.init(.angled),
         });
     }
 }

@@ -14,6 +14,7 @@ const Model = @import("../Model.zig");
 const World = @import("../World.zig");
 const Target = @import("../Target.zig");
 const Camera = @import("../Camera.zig");
+const ScreenWipe = @import("../screenwipes.zig").ScreenWipe;
 const Game = @import("../Game.zig");
 
 const Titlescreen = @This();
@@ -64,7 +65,8 @@ pub fn update(self: *Titlescreen) void {
         game.goto(.{
             .mode = .replace,
             .scene = .{ .world = world },
-            .to_black = Game.ScreenWipe.init(.angled),
+            .to_black = ScreenWipe.init(.angled),
+            .from_black = ScreenWipe.init(.spotlight),
         });
     }
 

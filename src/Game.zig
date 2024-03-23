@@ -2,10 +2,11 @@ const std = @import("std");
 const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const gl = @import("web/webgl.zig");
-const math = @import("math.zig");
 const time = @import("time.zig");
 const Batcher = @import("Batcher.zig");
 const Target = @import("Target.zig");
+const screenwipes = @import("screenwipes.zig");
+const ScreenWipe = screenwipes.ScreenWipe;
 const Titlescreen = @import("scenes/Titlescreen.zig");
 const World = @import("World.zig");
 const Game = @This();
@@ -34,114 +35,6 @@ const Scene = union(SceneType) {
     fn draw(self: Scene, target: Target) void {
         switch (self) {
             inline else => |scene| scene.draw(target),
-        }
-    }
-};
-
-const AngledWipe = struct {
-    const rows = 12;
-    const angle_size = 64;
-    const duration = 0.5;
-
-    fn draw(_: *AngledWipe, wipe: *ScreenWipe, batch: *Batcher, bounds_width: f32, bounds_height: f32) void {
-        const black = [_]f32{ 0, 0, 0, 1 };
-        var triangles: [rows * 6]Vec2 = undefined;
-
-        if ((wipe.percent <= 0 and wipe.is_from_black) or (wipe.percent >= 1 and !wipe.is_from_black)) {
-            batch.rect(0, 0, bounds_width, bounds_height, black);
-        }
-
-        const row_height = (bounds_height + 20) / rows;
-        const left = -angle_size;
-        const width = bounds_width + angle_size;
-
-        for (0..rows) |i| {
-            const x = left;
-            const y = -10 + @as(f32, @floatFromInt(i)) * row_height;
-            var e: f32 = 0;
-
-            // get delay based on Y
-            const across = @as(f32, @floatFromInt(i)) / rows;
-            const delay = (if (wipe.is_from_black) 1 - across else across) * 0.3;
-
-            // get ease after delay
-            if (wipe.percent > delay) {
-                e = @min(1, (wipe.percent - delay) / 0.7);
-            }
-
-            // start full, go to nothing, if we're wiping in
-            if (wipe.is_from_black) {
-                e = 1 - e;
-            }
-
-            // resulting width
-            const w = width * e;
-
-            const v = i * 6;
-            triangles[v + 0] = Vec2.new(x, y);
-            triangles[v + 1] = Vec2.new(x, y + row_height);
-            triangles[v + 2] = Vec2.new(x + w, y);
-
-            triangles[v + 3] = Vec2.new(x + w, y);
-            triangles[v + 4] = Vec2.new(x, y + row_height);
-            triangles[v + 5] = Vec2.new(x + w + angle_size, y + row_height);
-        }
-
-        // flip if we're wiping in
-        if (wipe.is_from_black) {
-            for (&triangles) |*triangle| {
-                triangle.xMut().* = bounds_width - triangle.x();
-                triangle.yMut().* = bounds_height - triangle.y();
-            }
-        }
-
-        var i: usize = 0;
-        while (i < triangles.len) : (i += 3) {
-            batch.triangle(triangles[i + 0], triangles[i + 1], triangles[i + 2], black);
-        }
-    }
-};
-
-pub const ScreenWipe = struct {
-    const Type = enum {
-        angled,
-    };
-
-    typ: Type,
-    is_from_black: bool = false,
-    is_finished: bool = false,
-    percent: f32 = 0,
-    duration: f32,
-
-    angled_wipe: AngledWipe = .{},
-
-    pub fn init(typ: Type) ScreenWipe {
-        return switch (typ) {
-            .angled => .{
-                .typ = typ,
-                .duration = AngledWipe.duration,
-            },
-        };
-    }
-
-    pub fn restart(self: *ScreenWipe, is_from_black: bool) void {
-        self.percent = 0;
-        self.is_from_black = is_from_black;
-        self.is_finished = false;
-    }
-
-    fn update(self: *ScreenWipe) void {
-        if (self.percent < 1) {
-            self.percent = math.approach(self.percent, 1, time.delta / self.duration);
-            if (self.percent >= 1) {
-                self.is_finished = true;
-            }
-        }
-    }
-
-    fn draw(self: *ScreenWipe, batch: *Batcher, bounds_width: f32, bounds_height: f32) void {
-        switch (self.typ) {
-            .angled => self.angled_wipe.draw(self, batch, bounds_width, bounds_height),
         }
     }
 };

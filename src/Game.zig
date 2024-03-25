@@ -50,12 +50,19 @@ const Transition = struct {
 
     const Mode = enum {
         replace,
+        push,
+        pop,
     };
 
     mode: Mode,
-    scene: Scene,
+    scene: ?Scene = null,
     to_black: ?ScreenWipe = null,
     from_black: ?ScreenWipe = null,
+    to_pause: bool = false,
+    from_pause: bool = false,
+    saving: bool = false,
+    stop_music: bool = false,
+    // perform_asset_reload: bool = false,
     hold_on_black_for: f32 = 0,
 };
 pub var game = Game{
@@ -86,7 +93,12 @@ pub fn goto(self: *Game, transition: Transition) void {
 
 pub fn update(self: *Game) void {
     // update top scene
-    self.scenes.getLast().update();
+    if (self.scenes.getLastOrNull()) |scene| {
+        const pausing =
+            (self.transition_step == .fade_in and self.transition.?.from_pause) or
+            (self.transition_step == .fade_out and self.transition.?.to_pause);
+        if (!pausing) scene.update();
+    }
 
     // handle transitions
     if (self.transition) |*transition| {
@@ -116,7 +128,13 @@ pub fn update(self: *Game) void {
                             if (self.scenes.popOrNull()) |*top| {
                                 top.deinit();
                             }
-                            self.scenes.append(t.scene) catch unreachable;
+                            self.scenes.append(t.scene.?) catch unreachable;
+                        },
+                        .push => {
+                            self.scenes.append(t.scene.?) catch unreachable;
+                        },
+                        .pop => {
+                            _ = self.scenes.pop();
                         },
                     }
                 }

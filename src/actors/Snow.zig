@@ -26,18 +26,19 @@ pub fn create(world: *World, amount: f32, direction: Vec3) !*Actor {
 pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     _ = si;
     const self = @fieldParentPtr(Snow, "actor", actor);
+    const world = actor.world;
 
     const texture = textures.findByName("circle");
 
-    const camera_position = actor.world.camera.position;
-    const camera_normal = actor.world.camera.forward();
+    const camera_position = world.camera.position;
+    const camera_normal = world.camera.forward();
 
     // TODO: compute bounds of camera frustum
     const box_center = camera_position.add(camera_normal.scale(300 * 5));
     const min = box_center.sub(Vec3.one().scale(300 * 5));
     const max = box_center.add(Vec3.one().scale(300 * 5));
     const area = 100 * 5;
-    const t = time.now;
+    const t = world.general_timer;
 
     const x0 = @floor(min.x() / area) * area;
     const y0 = @floor(min.y() / area) * area;
@@ -92,8 +93,8 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
                         y + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.y() * 5, area),
                         z + @mod(rng.float(f32) * area + (5 + rng.float(f32) * 20) * t * self.direction.z() * 5, area),
                     );
-                    const sprite = Sprite.createBillboard(actor.world, pos, texture, 0.5 * 5, color, false);
-                    actor.world.drawSprite(sprite);
+                    const sprite = Sprite.createBillboard(world, pos, texture, 0.5 * 5, color, false);
+                    world.drawSprite(sprite);
                 }
             }
         }

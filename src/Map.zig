@@ -72,8 +72,6 @@ pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             const floating_decoration = try Actor.create(FloatingDecoration, world);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
-            floating_decoration.rate = 0.25 * (1.0 + 2.0 * world.rng.float(f32));
-            floating_decoration.offset = world.rng.float(f32) * std.math.tau;
             world.add(&floating_decoration.actor);
         } else {
             try loadActor(world, entity);
@@ -118,6 +116,7 @@ fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !v
 fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
         const strawberry = try Actor.create(Strawberry, world);
+        world.strawberry = strawberry;
         return &strawberry.actor;
     } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
         const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");

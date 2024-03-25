@@ -101,21 +101,26 @@ fn StateMachine(comptime I: type, S: type) type {
         const Self = @This();
 
         const F = fn (*I) void;
+        const R = fn (*I, u32) f32;
         const Entry = struct {
             updateFn: *const F,
             enterFn: *const F,
             exitFn: *const F,
+            routineFn: ?*const R,
+            routine_state: u32 = 0,
+            routine_time: f32 = 0,
         };
 
         instance: *I,
         state: S,
         function_table: [@typeInfo(S).Enum.fields.len]Entry = undefined,
 
-        fn initState(self: *Self, s: S, updateFn: *const F, enterFn: *const F, exitFn: ?*const F) void {
+        fn initState(self: *Self, s: S, updateFn: ?*const F, enterFn: ?*const F, exitFn: ?*const F, routineFn: ?*const R) void {
             self.function_table[@intFromEnum(s)] = .{
-                .updateFn = updateFn,
-                .enterFn = enterFn,
+                .updateFn = if (updateFn) |f| f else noop,
+                .enterFn = if (enterFn) |f| f else noop,
                 .exitFn = if (exitFn) |f| f else noop,
+                .routineFn = routineFn,
             };
         }
 
@@ -125,10 +130,20 @@ fn StateMachine(comptime I: type, S: type) type {
             self.function_table[@intFromEnum(self.state)].exitFn(self.instance);
             self.state = s;
             self.function_table[@intFromEnum(self.state)].enterFn(self.instance);
+            self.function_table[@intFromEnum(self.state)].routine_state = 0;
+            self.function_table[@intFromEnum(self.state)].routine_time = 0;
         }
 
         fn update(self: *Self) void {
-            self.function_table[@intFromEnum(self.state)].updateFn(self.instance);
+            const entry = &self.function_table[@intFromEnum(self.state)];
+            entry.updateFn(self.instance);
+            if (entry.routineFn) |routine| {
+                if (entry.routine_time <= 0) {
+                    entry.routine_time += routine(self.instance, entry.routine_state);
+                    entry.routine_state += 1;
+                }
+                entry.routine_time -= time.delta;
+            }
         }
     };
 }
@@ -286,8 +301,17 @@ fn solidWaistTestPos(self: Player) Vec3 {
 fn solidHeadTestPos(self: Player) Vec3 {
     return self.actor.position.add(Vec3.new(0, 0, 3 * 5));
 }
+fn inFeatherState(self: Player) bool {
+    return switch (self.state_machine.state) {
+        .feather_start, .feather => true,
+        else => false,
+    };
+}
 fn inBubble(self: Player) bool {
     return self.state_machine.state == .bubble;
+}
+fn isStrawberryCounterVisible(self: Player) bool {
+    return self.state_machine.state == .strawberry_get;
 }
 fn isAbleToPickup(self: Player) bool {
     return switch (self.state_machine.state) {
@@ -296,6 +320,16 @@ fn isAbleToPickup(self: Player) bool {
         .cassette,
         .strawberry_reveal,
         .respawn,
+        .dead,
+        => false,
+        else => true,
+    };
+}
+fn isAbleToPause(self: Player) bool {
+    return switch (self.state_machine.state) {
+        .strawberry_reveal,
+        .strawberry_get,
+        .cassette,
         .dead,
         => false,
         else => true,
@@ -314,12 +348,14 @@ pub fn init(actor: *Actor) void {
     actor.cast_point_shadow = .{};
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
-    self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit);
-    self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit);
-    self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit);
-    self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit);
-    self.state_machine.initState(.respawn, stRespawnUpdate, stRespawnEnter, stRespawnExit);
-    self.state_machine.initState(.dead, stDeadUpdate, stDeadEnter, null);
+    self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit, null);
+    self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit, null);
+    self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit, null);
+    self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit, null);
+    self.state_machine.initState(.respawn, stRespawnUpdate, stRespawnEnter, stRespawnExit, null);
+    self.state_machine.initState(.strawberry_reveal, null, null, stStrawbRevealExit, stStrawbRevealRoutine);
+    self.state_machine.initState(.dead, stDeadUpdate, stDeadEnter, null, null);
+    self.state_machine.initState(.cassette, null, null, stCassetteExit, stCassetteRoutine);
 
     self.setHairColor(color_normal);
 }
@@ -1502,6 +1538,50 @@ fn stRespawnExit(self: *Player) void {
     self.draw_orbs = false;
 }
 
+fn stStrawbRevealRoutine(self: *Player, state: u32) f32 {
+    const world = self.actor.world;
+    const enter_look_at = world.strawberry.actor;
+
+    self.target_facing = enter_look_at.position.sub(self.actor.position).toVec2().norm();
+
+    const look_at = enter_look_at.position.add(Vec3.new(0, 0, 3 * 5));
+    const normal = self.actor.position.sub(look_at).norm();
+    const from_pos = look_at.add(normal.scale(40 * 5)).add(Vec3.new(0, 0, 20 * 5));
+    const to_pos = self.actor.position.add(Vec3.new(0, 0, 16 * 5)).add(normal.scale(40 * 5));
+    const control = from_pos.add(to_pos).scale(0.5).add(Vec3.new(0, 0, 40 * 5));
+
+    switch (state) {
+        0 => {
+            self.camera_override = .{ .position = from_pos, .look_at = look_at };
+            world.camera.position = from_pos;
+            world.camera.look_at = look_at;
+            return 1;
+        },
+        1...180 => {
+            const p = @as(f32, @floatFromInt(state)) / 180.0;
+            self.camera_override = .{
+                .position = math.bezier(from_pos, control, to_pos, easings.inSine(p)),
+                .look_at = look_at,
+            };
+        },
+        181...240 => {
+            const result = self.getCameraTarget();
+            const p = @as(f32, @floatFromInt(state - 180)) / 60.0;
+            const t = easings.outSine(p);
+            self.camera_override = .{
+                .position = Vec3.lerp(to_pos, result.camera_position, t),
+                .look_at = Vec3.lerp(look_at, result.camera_look_at, t),
+            };
+        },
+        else => self.state_machine.setState(.normal),
+    }
+    return 1.0 / 60.0;
+}
+
+fn stStrawbRevealExit(self: *Player) void {
+    self.camera_override = null;
+}
+
 fn stDeadEnter(self: *Player) void {
     self.draw_model = false;
     self.draw_hair = false;
@@ -1532,7 +1612,7 @@ fn stDeadUpdate(self: *Player) void {
 pub fn enterCassette(self: *Player, it: *Cassette) void {
     if (self.state_machine.state != .cassette) {
         self.cassette = it;
-        self.state_machine.state = .cassette;
+        self.state_machine.setState(.cassette);
         self.actor.position = it.actor.position.sub(Vec3.new(0, 0, 3 * 5));
         self.draw_model = false;
         self.draw_hair = false;
@@ -1542,4 +1622,54 @@ pub fn enterCassette(self: *Player, it: *Cassette) void {
         // audio.stop_bus(sfx.bus_gameplay_world, false);
         // audio.play(sfx.sfx_cassette_enter, position);
     }
+}
+
+pub fn stCassetteExit(self: *Player) void {
+    self.cassette.?.setCooldown();
+    self.cassette = null;
+    self.draw_model = true;
+    self.draw_hair = true;
+    self.camera_override = null;
+    self.actor.cast_point_shadow.?.alpha = 1;
+}
+
+pub fn stCassetteRoutine(self: *Player, state: u32) f32 {
+    switch (state) {
+        0 => {},
+        1 => {
+            const world = self.actor.world;
+            if (world.entry.submap) {
+                game.goto(.{
+                    .mode = .pop,
+                    .to_pause = true,
+                    .to_black = ScreenWipe.init(.spotlight),
+                    .stop_music = true,
+                });
+            } else {
+                game.goto(.{
+                    .mode = .push,
+                    .scene = .{ .world = World.create(world.allocator, .{
+                        .map = self.cassette.?.map,
+                        .checkpoint = "",
+                        .submap = true,
+                        .reason = .entered,
+                    }) catch unreachable },
+                    .to_pause = true,
+                    .to_black = ScreenWipe.init(.spotlight),
+                    .stop_music = true,
+                });
+            }
+        },
+        2 => {
+            // audio.play(.sfx_cassette_exit, self.actor.position);
+            self.cassette.?.playerExit();
+            self.state_machine.setState(.normal);
+            self.velocity = Vec3.new(0, 0, 25 * 5);
+            self.hold_jump_speed = self.velocity.z();
+            self.t_hold_jump = 0.1;
+            self.auto_jump = true;
+        },
+        else => {},
+    }
+    return 1;
 }

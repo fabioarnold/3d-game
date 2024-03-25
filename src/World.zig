@@ -5,6 +5,7 @@ const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
 const math = @import("math.zig");
+const time = @import("time.zig");
 const wasm = @import("web/wasm.zig");
 const gl = @import("web/webgl.zig");
 const shaders = @import("shaders.zig");
@@ -22,6 +23,7 @@ const Snow = @import("actors/Snow.zig");
 const Solid = @import("actors/Solid.zig");
 const Checkpoint = @import("actors/Checkpoint.zig");
 const Player = @import("actors/Player.zig");
+const Strawberry = @import("actors/Strawberry.zig");
 const maps = @import("maps.zig");
 const Map = @import("Map.zig");
 const logger = std.log.scoped(.world);
@@ -43,6 +45,7 @@ allocator: std.mem.Allocator,
 camera: Camera = .{},
 rng: std.rand.Random,
 entry: EntryInfo,
+general_timer: f32 = 0,
 
 actors: std.ArrayList(*Actor),
 adding: std.ArrayList(*Actor),
@@ -50,6 +53,7 @@ destroying: std.ArrayList(*Actor),
 solids: std.ArrayList(*Solid),
 sprites: std.ArrayList(Sprite),
 player: *Player,
+strawberry: *Strawberry,
 skybox: Skybox,
 
 var prng: std.rand.DefaultPrng = std.rand.DefaultPrng.init(0);
@@ -66,6 +70,7 @@ pub fn create(allocator: Allocator, entry: EntryInfo) !*World {
         .solids = std.ArrayList(*Solid).init(allocator),
         .sprites = std.ArrayList(Sprite).init(allocator),
         .player = undefined,
+        .strawberry = undefined,
         .skybox = undefined,
     };
     try world.load(entry);
@@ -311,6 +316,8 @@ pub fn solidWallCheckClosestToNormal(self: World, point: Vec3, radius: f32, norm
 }
 
 pub fn update(self: *World) void {
+    self.general_timer += time.delta;
+
     self.resolveChanges();
     for (self.actors.items) |actor| {
         actor.update();

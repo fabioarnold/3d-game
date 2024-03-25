@@ -133,6 +133,10 @@ pub fn lerp3(a: f32, b: f32, c: f32, d: f32, t: f32) f32 {
     }
 }
 
+pub fn bezier(a: Vec3, b: Vec3, c: Vec3, t: f32) Vec3 {
+    return Vec3.lerp(Vec3.lerp(a, b, t), Vec3.lerp(b, c, t), t);
+}
+
 pub fn clampedMap(val: f32, min: f32, max: f32, new_min: f32, new_max: f32) f32 {
     return std.math.clamp((val - min) / (max - min), 0, 1) * (new_max - new_min) + new_min;
 }

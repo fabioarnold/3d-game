@@ -19,6 +19,7 @@ const Game = @import("../Game.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
 const Cassette = @import("Cassette.zig");
+const Strawberry = @import("Strawberry.zig");
 const Dust = @import("Dust.zig");
 const models = @import("../models.zig");
 const Model = @import("../Model.zig");
@@ -292,8 +293,15 @@ climb_corner_camera_to: ?Vec2 = null,
 climb_input_sign: f32 = 1,
 t_climb_cooldown: f32 = 0,
 
+// straberry get state
+last_strawberry: ?Strawberry = null,
+strawberry_get_forward: Vec2 = Vec2.zero(),
+
 // cassette state
 cassette: ?*Cassette = null,
+
+// bubble state
+bubble_to: Vec3 = Vec3.zero(),
 
 fn solidWaistTestPos(self: Player) Vec3 {
     return self.actor.position.add(Vec3.new(0, 0, 3 * 5));
@@ -352,6 +360,7 @@ pub fn init(actor: *Actor) void {
     self.state_machine.initState(.dashing, stDashingUpdate, stDashingEnter, stDashingExit, null);
     self.state_machine.initState(.skidding, stSkiddingUpdate, stSkiddingEnter, stSkiddingExit, null);
     self.state_machine.initState(.climbing, stClimbingUpdate, stClimbingEnter, stClimbingExit, null);
+    self.state_machine.initState(.strawberry_get, stStrawberryGetUpdate, stStrawberryGetEnter, stStrawberryGetExit, stStrawberryGetRoutine);
     self.state_machine.initState(.respawn, stRespawnUpdate, stRespawnEnter, stRespawnExit, null);
     self.state_machine.initState(.strawberry_reveal, null, null, stStrawbRevealExit, stStrawbRevealRoutine);
     self.state_machine.initState(.dead, stDeadUpdate, stDeadEnter, null, null);
@@ -1515,6 +1524,81 @@ fn stClimbingUpdate(self: *Player) void {
     }
 }
 
+fn stStrawberryGetEnter(self: *Player) void {
+    self.skinned_model.play("StrawberryGrab");
+    // Model.Flags = ModelFlags.StrawberryGetEffect;
+    // Hair.Flags = ModelFlags.StrawberryGetEffect;
+    // if (lastStrawb is { } strawb)
+    // 	strawb.Model.Flags = ModelFlags.StrawberryGetEffect;
+    self.velocity = Vec3.zero();
+    const world = self.actor.world;
+    self.strawberry_get_forward = world.camera.position.sub(self.actor.position).toVec2().norm();
+    self.camera_override = .{
+        .position = world.camera.position,
+        .look_at = world.camera.look_at,
+    };
+}
+
+fn stStrawberryGetExit(self: *Player) void {
+    self.camera_override = null;
+
+    // Model.Flags = ModelFlags.Default | ModelFlags.Silhouette;
+    // Hair.Flags = ModelFlags.Default | ModelFlags.Silhouette;
+
+    if (self.last_strawberry) |*last_strawberry| {
+        if (last_strawberry.bubble_to) |bubble_to| {
+            self.bubbleTo(bubble_to);
+        }
+        self.actor.world.destroy(&last_strawberry.actor);
+    }
+}
+
+fn stStrawberryGetUpdate(self: *Player) void {
+    self.actor.angle = math.angleFromDir(self.strawberry_get_forward) - std.math.pi / 7.0;
+    self.target_facing = math.dirFromAngle(self.actor.angle);
+    self.camera_override = .{
+        .position = self.actor.position.add(self.strawberry_get_forward.toVec3(0.8).scale(50 * 5)),
+        .look_at = self.actor.position.add(Vec3.new(0, 0, 6 * 5)),
+    };
+}
+
+fn stStrawberryGetRoutine(self: *Player, state: u32) f32 {
+    switch (state) {
+        0 => return 2,
+        1 => {
+            // if (self.last_strawb != null)
+            //     Save.CurrentRecord.Strawberries.Add(last_strawb.ID);
+
+            return 1.2;
+        },
+        2 => {
+            if (self.actor.world.entry.submap) {
+                // Save.CurrentRecord.CompletedSubMaps.Add(World.Entry.Map);
+                game.goto(.{
+                    .mode = .pop,
+                    .to_pause = true,
+                    .to_black = ScreenWipe.init(.spotlight),
+                    .stop_music = true,
+                    .saving = true,
+                });
+            } else {
+                self.state_machine.setState(.normal);
+            }
+        },
+        else => {},
+    }
+    return 0;
+}
+
+pub fn strawberryGet(self: *Player, strawberry: *Strawberry) void {
+    if (self.state_machine.state != .strawberry_get) {
+        self.last_strawberry = strawberry;
+        self.state_machine.setState(.strawberry_get);
+        self.actor.position = strawberry.actor.position.add(Vec3.new(0, 0, -3 * 5));
+        self.last_strawberry.actor.position = self.actor.position.add(Vec3.new(0, 0, 12 * 5));
+    }
+}
+
 fn stRespawnEnter(self: *Player) void {
     self.draw_model = false;
     self.draw_hair = false;
@@ -1607,6 +1691,14 @@ fn stDeadUpdate(self: *Player) void {
             .to_black = ScreenWipe.init(.angled),
         });
     }
+}
+
+pub fn bubbleTo(self: *Player, target: Vec3) void {
+    self.bubble_to = target;
+    self.skinned_model.play("StrawberryGrab");
+    self.state_machine.setState(.bubble);
+    self.actor.cast_point_shadow.?.alpha = 0;
+    // audio.play(.sfx_bubble_in, self.actor.position);
 }
 
 pub fn enterCassette(self: *Player, it: *Cassette) void {

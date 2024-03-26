@@ -13,6 +13,8 @@ const model = models.findByName("strawberry");
 
 actor: Actor,
 
+bubble_to: ?Vec3 = null,
+
 pub fn draw(actor: *Actor, si: ShaderInfo) void {
     const t: f32 = @floatCast(wasm.performanceNow() / 1000.0);
     const transform = actor.getTransform()

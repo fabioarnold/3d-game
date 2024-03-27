@@ -294,7 +294,7 @@ climb_input_sign: f32 = 1,
 t_climb_cooldown: f32 = 0,
 
 // straberry get state
-last_strawberry: ?Strawberry = null,
+last_strawberry: ?*Strawberry = null,
 strawberry_get_forward: Vec2 = Vec2.zero(),
 
 // cassette state
@@ -1545,7 +1545,7 @@ fn stStrawberryGetExit(self: *Player) void {
     // Model.Flags = ModelFlags.Default | ModelFlags.Silhouette;
     // Hair.Flags = ModelFlags.Default | ModelFlags.Silhouette;
 
-    if (self.last_strawberry) |*last_strawberry| {
+    if (self.last_strawberry) |last_strawberry| {
         if (last_strawberry.bubble_to) |bubble_to| {
             self.bubbleTo(bubble_to);
         }
@@ -1595,7 +1595,7 @@ pub fn strawberryGet(self: *Player, strawberry: *Strawberry) void {
         self.last_strawberry = strawberry;
         self.state_machine.setState(.strawberry_get);
         self.actor.position = strawberry.actor.position.add(Vec3.new(0, 0, -3 * 5));
-        self.last_strawberry.actor.position = self.actor.position.add(Vec3.new(0, 0, 12 * 5));
+        strawberry.actor.position = self.actor.position.add(Vec3.new(0, 0, 12 * 5));
     }
 }
 

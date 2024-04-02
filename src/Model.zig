@@ -131,12 +131,19 @@ pub fn drawWithTransforms(self: *Model, si: ShaderInfo, model_mat: Mat4, global_
         defer gl.glUniform1f(si.blend_skin_loc, 0);
 
         for (mesh.primitives.items) |primitive| {
-            const material = data.materials.items[primitive.material.?].metallic_roughness;
-            const texture = self.textures[material.base_color_texture.?.index];
-            gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
-            const c = material.base_color_factor;
-            gl.glUniform4f(si.color_loc, c[0], c[1], c[2], c[3]);
-            gl.glUniform1f(si.effects_loc, 1.0 - material.metallic_factor);
+            const material = data.materials.items[primitive.material.?];
+            if (material.metallic_roughness.base_color_texture) |texture_info| {
+                const texture = self.textures[texture_info.index];
+                gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
+                const c = material.metallic_roughness.base_color_factor;
+                gl.glUniform4f(si.color_loc, c[0], c[1], c[2], c[3]);
+            } else if (material.emissive_texture) |texture_info| {
+                const texture = self.textures[texture_info.index];
+                gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
+                const c = material.emissive_factor;
+                gl.glUniform4f(si.color_loc, c[0], c[1], c[2], 1);
+            }
+            gl.glUniform1f(si.effects_loc, 1.0 - material.metallic_roughness.metallic_factor);
             for (primitive.attributes.items) |attribute| {
                 switch (attribute) {
                     .position => |accessor_index| self.bindVertexAttrib(accessor_index, 0),

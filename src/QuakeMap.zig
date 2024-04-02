@@ -79,6 +79,11 @@ pub const Entity = struct {
         return self.properties.items[i].value;
     }
 
+    pub fn getIntProperty(self: Entity, key: []const u8) !i32 {
+        const string = try self.getStringProperty(key);
+        return try parseInt(string);
+    }
+
     pub fn getFloatProperty(self: Entity, key: []const u8) !f32 {
         const string = try self.getStringProperty(key);
         return try parseFloat(string);
@@ -325,7 +330,9 @@ fn parseFloat(string: []const u8) !f32 {
     var decimal: f64 = 0;
     for (string, 0..) |c, i| {
         switch (c) {
-            '-' => signed = true,
+            '-' => {
+                if (i == 0) signed = true else return error.UnexpectedCharacter;
+            },
             '0'...'9' => {
                 const digit: f64 = @floatFromInt(c - '0');
                 decimal = 10 * decimal + digit;
@@ -340,4 +347,22 @@ fn parseFloat(string: []const u8) !f32 {
         decimal /= denom;
     }
     return @floatCast(decimal);
+}
+
+fn parseInt(string: []const u8) !i32 {
+    var signed: bool = false;
+    var decimal: i32 = 0;
+    for (string, 0..) |c, i| {
+        switch (c) {
+            '-' => {
+                if (i == 0) signed = true else return error.UnexpectedCharacter;
+            },
+            '0'...'9' => {
+                const digit: i32 = @intCast(c - '0');
+                decimal = 10 * decimal + digit;
+            },
+            else => return error.UnexpectedCharacter,
+        }
+    }
+    return decimal;
 }

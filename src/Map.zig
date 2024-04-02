@@ -19,6 +19,7 @@ const Player = @import("actors/Player.zig");
 const Solid = @import("actors/Solid.zig");
 const StaticProp = @import("actors/StaticProp.zig");
 const Strawberry = @import("actors/Strawberry.zig");
+const Refill = @import("actors/Refill.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -118,6 +119,9 @@ fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
         const strawberry = try Actor.create(Strawberry, world);
         world.strawberry = strawberry;
         return &strawberry.actor;
+    } else if (std.mem.eql(u8, entity.classname, "Refill")) {
+        const refill = try Refill.create(world, entity.getIntProperty("double") catch 0 > 0);
+        return &refill.actor;
     } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
         const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");
         return &cassette.actor;

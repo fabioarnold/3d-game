@@ -1237,7 +1237,7 @@ fn stDashingUpdate(self: *Player) void {
     }
 }
 
-fn refillDash(self: *Player, amount: u32) void {
+pub fn refillDash(self: *Player, amount: u32) void {
     if (self.dashes < amount) {
         self.dashes = amount;
         self.t_dash_reset_flash = 0.05;

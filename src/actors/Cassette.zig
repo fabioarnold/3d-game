@@ -59,8 +59,8 @@ pub fn update(actor: *Actor) void {
 pub fn onPickup(actor: *Actor) void {
     const self = @fieldParentPtr(Cassette, "actor", actor);
     if (!self.isCollected() and self.t_cooldown <= 0 and !game.isMidTransition()) {
-        self.actor.world.player.stop();
-        self.actor.world.player.enterCassette(self);
+        actor.world.player.stop();
+        actor.world.player.enterCassette(self);
         self.t_wiggle = 1;
     }
 }

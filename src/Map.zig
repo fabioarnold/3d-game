@@ -20,6 +20,7 @@ const Solid = @import("actors/Solid.zig");
 const StaticProp = @import("actors/StaticProp.zig");
 const Strawberry = @import("actors/Strawberry.zig");
 const Refill = @import("actors/Refill.zig");
+const Coin = @import("actors/Coin.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -114,6 +115,21 @@ fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !v
     world.add(actor);
 }
 
+fn findTargetEntity(map: *const Map, entity: QuakeMap.Entity, target_name: []const u8) ?QuakeMap.Entity {
+    if (target_name.len == 0) return null;
+
+    const target_name_property = entity.getStringProperty("targetname") catch "";
+    if (std.mem.eql(u8, target_name_property, target_name)) return entity;
+
+    for (map.entities.items) |child| {
+        if (map.findTargetEntity(child, target_name)) |target| {
+            return target;
+        }
+    }
+
+    return null;
+}
+
 fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
         const strawberry = try Actor.create(Strawberry, world);
@@ -125,6 +141,9 @@ fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
     } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
         const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");
         return &cassette.actor;
+    } else if (std.mem.eql(u8, entity.classname, "Coin")) {
+        const coin = try Actor.create(Coin, world);
+        return &coin.actor;
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
         var granny = try Actor.create(Granny, world);
         return &granny.actor;

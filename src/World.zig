@@ -162,7 +162,7 @@ const RayHit = struct {
 const RayCastOptions = struct {
     ignore_backfaces: bool = true,
 };
-pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, options: RayCastOptions) ?RayHit {
+pub fn solidRayCast(self: World, point_: Vec3, direction: Vec3, distance: f32, options: RayCastOptions) ?RayHit {
     var hit: RayHit = undefined;
     var has_closest: ?f32 = null;
 
@@ -177,6 +177,9 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
         // TODO: flags
 
         // TODO: bounds intersect
+
+        // TODO: transform verts and faces to world (remove .sub(solid.actor.position))
+        const point = point_.sub(solid.actor.position);
 
         const verts = solid.vertices.items;
 
@@ -202,6 +205,7 @@ pub fn solidRayCast(self: World, point: Vec3, direction: Vec3, distance: f32, op
 
                     has_closest = dist;
                     hit.point = point.add(direction.scale(dist));
+                    hit.point = hit.point.add(solid.actor.position); // TODO: remove
                     hit.normal = face.plane.normal;
                     hit.distance = dist;
                     hit.actor = &solid.actor;
@@ -223,17 +227,22 @@ pub const WallHit = struct {
 };
 pub fn solidWallCheck(
     self: World,
-    point: Vec3,
+    point_: Vec3,
     radius: f32,
     hits: *std.ArrayListUnmanaged(WallHit),
 ) void {
-    const flat_plane = math.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
-    const flat_point = Vec2.new(point.x(), point.y());
+    // const flat_plane = math.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
+    // const flat_point = Vec2.new(point.x(), point.y());
 
     for (self.solids.items) |solid| {
         // TODO: flags
 
         // TODO: bounds intersect
+
+        // TODO: transform verts and faces to world (remove .sub(solid.actor.position))
+        const point = point_.sub(solid.actor.position);
+        const flat_plane = math.Plane{ .normal = Vec3.new(0, 0, 1), .d = point.z() };
+        const flat_point = Vec2.new(point.x(), point.y());
 
         const verts = solid.vertices.items;
 
@@ -242,7 +251,7 @@ pub fn solidWallCheck(
             if (face.plane.normal.z() <= -1 or face.plane.normal.z() >= 1)
                 continue;
 
-            // igore planes that are definitely too far away
+            // ignore planes that are definitely too far away
             const distance = face.plane.distance(point);
             if (distance < 0 or distance > radius)
                 continue;
@@ -271,7 +280,7 @@ pub fn solidWallCheck(
 
                     has_closest = WallHit{
                         .pushout = Vec3.new(pushout.x(), pushout.y(), 0),
-                        .point = Vec3.new(next.x(), next.y(), point.z()),
+                        .point = next.toVec3(point.z()).add(solid.actor.position), // TODO: remove
                         .normal = face.plane.normal,
                         .actor = &solid.actor,
                     };

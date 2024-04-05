@@ -24,7 +24,8 @@ vertices: std.ArrayList(Vec3),
 faces: std.ArrayList(Face),
 
 pub const vtable = Actor.Interface.VTable{
-    .deinit = deinit,
+// TODO: connect to Actor
+    // .deinit = deinit,
     .draw = draw,
 };
 
@@ -39,7 +40,6 @@ pub fn create(world: *World) !*Solid {
     return solid;
 }
 
-// TODO: connect to Actor
 pub fn deinit(ptr: *anyopaque, allocator: std.mem.Allocator) void {
     const self: *Solid = @alignCast(@ptrCast(ptr));
     self.vertices.deinit();

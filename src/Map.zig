@@ -6,6 +6,7 @@ const Vec3 = za.Vec3;
 const Mat3 = za.Mat3;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
+const math = @import("math.zig");
 const assets = @import("assets");
 const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
@@ -30,6 +31,15 @@ const Map = @This();
 const BoundingBox = struct {
     min: Vec3,
     max: Vec3,
+
+    fn center(self: BoundingBox) Vec3 {
+        return self.min.add(self.max).scale(0.5);
+    }
+
+    fn conflate(self: *BoundingBox, other: BoundingBox) void {
+        self.min = self.min.min(other.min);
+        self.max = self.max.max(other.max);
+    }
 };
 
 quake_map: QuakeMap,
@@ -74,14 +84,14 @@ pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             const floating_decoration = try FloatingDecoration.create(world);
-            floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
+            floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items, Vec3.zero());
             world.add(Actor.Interface.make(FloatingDecoration, floating_decoration));
         } else {
             try loadActor(&self.quake_map, world, entity);
         }
     }
     const decoration_solid = try Solid.create(world);
-    decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
+    decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items, Vec3.zero());
     world.add(Actor.Interface.make(Solid, decoration_solid));
 }
 
@@ -166,8 +176,32 @@ fn createActor(map: *const QuakeMap, world: *World, entity: QuakeMap.Entity) !?A
     }
 }
 
+fn calculateSolidBounds(solid: *const QuakeMap.Solid) BoundingBox {
+    const v = solid.faces.items[0].vertices[0].cast(f32);
+    var bounds: BoundingBox = .{ .min = v, .max = v };
+    for (solid.faces.items) |face| {
+        for (face.vertices) |vertex| {
+            bounds.min = bounds.min.min(vertex.cast(f32));
+            bounds.max = bounds.max.max(vertex.cast(f32));
+        }
+    }
+    return bounds;
+}
+
+fn calculateSolidsBounds(solids: []const QuakeMap.Solid) BoundingBox {
+    var bounds = calculateSolidBounds(&solids[0]);
+    for (solids[1..]) |*solid| {
+        bounds.conflate(calculateSolidBounds(solid));
+    }
+    return bounds;
+}
+
 fn generateSolid(allocator: Allocator, into: *Solid, solids: []const QuakeMap.Solid) !void {
-    into.model = try Model.fromSolids(allocator, solids);
+    const bounds = calculateSolidsBounds(solids);
+    const center = bounds.center();
+    into.actor.position = center;
+
+    into.model = try Model.fromSolids(allocator, solids, center.scale(-1));
     into.vertices = std.ArrayList(Vec3).init(allocator);
     into.faces = std.ArrayList(Solid.Face).init(allocator);
 
@@ -177,13 +211,15 @@ fn generateSolid(allocator: Allocator, into: *Solid, solids: []const QuakeMap.So
             const vertex_index = into.vertices.items.len;
             // TODO: skip too small faces
             for (face.vertices) |vertex| {
-                try into.vertices.append(vertex.cast(f32));
+                try into.vertices.append(vertex.cast(f32).sub(center));
             }
+            var plane: math.Plane = .{
+                .normal = face.plane.normal.cast(f32),
+                .d = @floatCast(face.plane.d),
+            };
+            plane.d += plane.normal.dot(center); // transform plane
             try into.faces.append(.{
-                .plane = .{
-                    .normal = face.plane.normal.cast(f32),
-                    .d = @floatCast(face.plane.d),
-                },
+                .plane = plane,
                 .vertex_start = vertex_index,
                 .vertex_count = into.vertices.items.len - vertex_index,
             });
@@ -227,7 +263,7 @@ pub const Model = struct {
     vertex_buffer: gl.GLuint,
     index_buffer: gl.GLuint,
 
-    fn fromSolids(allocator: Allocator, solids: []const QuakeMap.Solid) !Model {
+    fn fromSolids(allocator: Allocator, solids: []const QuakeMap.Solid, offset: Vec3) !Model {
         var self = Model{
             .materials = std.ArrayList(Material).init(allocator),
             .vertex_buffer = undefined,
@@ -281,7 +317,7 @@ pub const Model = struct {
                     // add face vertices
                     const n = face.plane.normal.cast(f32);
                     for (face.vertices) |vertex| {
-                        const pos = vertex.cast(f32);
+                        const pos = vertex.cast(f32).add(offset);
                         const uv = Vec2.new(
                             (u_axis.dot(pos) + face.shift_x) / texture_size.x(),
                             (v_axis.dot(pos) + face.shift_y) / texture_size.y(),

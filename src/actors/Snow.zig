@@ -16,17 +16,24 @@ actor: Actor,
 amount: f32,
 direction: Vec3,
 
-pub fn create(world: *World, amount: f32, direction: Vec3) !*Actor {
-    const dust = try Actor.create(Snow, world);
-    dust.amount = amount;
-    dust.direction = direction;
-    return &dust.actor;
+pub const vtable = Actor.Interface.VTable{
+    .draw = draw,
+};
+
+pub fn create(world: *World, amount: f32, direction: Vec3) !*Snow {
+    const self = try world.allocator.create(Snow);
+    self.* = .{
+        .actor = .{.world = world},
+        .amount = amount,
+        .direction = direction,
+    };
+    return self;
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
     _ = si;
-    const self = @fieldParentPtr(Snow, "actor", actor);
-    const world = actor.world;
+    const self: *Snow = @alignCast(@ptrCast(ptr));
+    const world = self.actor.world;
 
     const texture = textures.findByName("circle");
 

@@ -35,18 +35,27 @@ const CreateOptions = struct {
     color: [4]f32 = [4]f32{ 0.7, 0.75, 0.8, 1 },
 };
 
-pub fn create(world: *World, position: Vec3, velocity: Vec3, options: CreateOptions) !*Actor {
-    const dust = try Actor.create(Dust, world);
-    dust.actor.position = position;
-    dust.velocity = velocity;
-    dust.color = options.color;
+pub const vtable = Actor.Interface.VTable{
+    .update = update,
+    .draw = draw,
+};
+
+pub fn create(world: *World, position: Vec3, velocity: Vec3, options: CreateOptions) !*Dust {
+    const self = try world.allocator.create(Dust);
+    self.* = .{
+        .actor = .{ .world = world, .position = position, },
+        .velocity = velocity,
+        .image = textures.findByName(images[world.rng.uintLessThan(usize, images.len)]),
+        .color = options.color,
+        .duration = 0.5 + 0.5 * world.rng.float(f32),
+    };
     // UpdateOffScreen = true;
-    return &dust.actor;
+    return self;
 }
 
-pub fn update(actor: *Actor) void {
-    const self = @fieldParentPtr(Dust, "actor", actor);
-    actor.position = actor.position.add(self.velocity.scale(time.delta));
+pub fn update(ptr: *anyopaque) void {
+    const self: *Dust = @alignCast(@ptrCast(ptr));
+    self.actor.position = self.actor.position.add(self.velocity.scale(time.delta));
     self.velocity.zMut().* += 5 * 10 * time.delta;
 
     var v_xy = self.velocity.toVec2();
@@ -56,12 +65,12 @@ pub fn update(actor: *Actor) void {
     self.percent += time.delta / self.duration;
     if (self.percent >= 1) {
         self.percent = 1;
-        actor.world.destroy(actor);
+        self.actor.world.destroy(Actor.Interface.make(Dust, self));
     }
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
     _ = si;
-    const self = @fieldParentPtr(Dust, "actor", actor);
-    actor.world.drawSprite(Sprite.createBillboard(actor.world, actor.position, self.image, 5 * 4 * (1.0 - self.percent), self.color, false));
+    const self: *Dust = @alignCast(@ptrCast(ptr));
+    self.actor.world.drawSprite(Sprite.createBillboard(self.actor.world, self.actor.position, self.image, 5 * 4 * (1.0 - self.percent), self.color, false));
 }

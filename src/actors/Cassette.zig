@@ -29,19 +29,22 @@ fn isCollected(self: *Cassette) bool {
     return false;
 }
 
-pub fn init(actor: *Actor) void {
-    const self = @fieldParentPtr(Cassette, "actor", actor);
-    self.* = .{
-        .actor = actor.*,
-        .map = undefined, // set by create
-    };
-    self.actor.pickup = .{ .radius = 16 * 5 };
-    self.actor.cast_point_shadow = .{};
-}
+pub const vtable = Actor.Interface.VTable{
+    .update = update,
+    .pickup = pickup,
+    .draw = draw,
+};
 
 pub fn create(world: *World, map: []const u8) !*Cassette {
-    const self = try Actor.create(Cassette, world);
-    self.map = map;
+    const self = try world.allocator.create(Cassette);
+    self.* = .{
+        .actor = .{
+            .world = world,
+            .pickup = .{ .radius = 16 * 5 },
+            .cast_point_shadow = .{},
+        },
+        .map = map,
+    };
     return self;
 }
 
@@ -49,18 +52,18 @@ pub fn setCooldown(self: *Cassette) void {
     self.t_cooldown = 1;
 }
 
-pub fn update(actor: *Actor) void {
-    const self = @fieldParentPtr(Cassette, "actor", actor);
-    actor.cast_point_shadow.?.alpha = if (self.isCollected()) 0.5 else 1;
+pub fn update(ptr: *anyopaque) void {
+    const self: *Cassette = @alignCast(@ptrCast(ptr));
+    self.actor.cast_point_shadow.?.alpha = if (self.isCollected()) 0.5 else 1;
     self.t_cooldown = math.approach(self.t_cooldown, 0, time.delta);
     self.t_wiggle = math.approach(self.t_wiggle, 0, time.delta / 0.7);
 }
 
-pub fn onPickup(actor: *Actor) void {
-    const self = @fieldParentPtr(Cassette, "actor", actor);
+pub fn pickup(ptr: *anyopaque) void {
+    const self: *Cassette = @alignCast(@ptrCast(ptr));
     if (!self.isCollected() and self.t_cooldown <= 0 and !game.isMidTransition()) {
-        actor.world.player.stop();
-        actor.world.player.enterCassette(self);
+        self.actor.world.player.stop();
+        self.actor.world.player.enterCassette(self);
         self.t_wiggle = 1;
     }
 }
@@ -69,11 +72,11 @@ pub fn playerExit(self: *Cassette) void {
     self.t_wiggle = 1;
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
-    const self = @fieldParentPtr(Cassette, "actor", actor);
-    const world = actor.world;
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
+    const self: *Cassette = @alignCast(@ptrCast(ptr));
+    const world = self.actor.world;
     const wiggle = 1 + @sin(self.t_wiggle * std.math.tau * 2) * 0.8 * self.t_wiggle;
-    const model_mat = actor.getTransform()
+    const model_mat = self.actor.getTransform()
         .mul(Mat4.fromRotation(std.math.radiansToDegrees(f32, world.general_timer * 3), Vec3.new(0, 0, 1)))
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, @sin(world.general_timer * 2) * 2)))
         .mul(Mat4.fromScale(Vec3.one().scale(2.5 * wiggle * 5)));
@@ -86,7 +89,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
     if (self.t_wiggle > 0) {
         const ring_tex = textures.findByName("ring");
         const color = [4]f32{ 1, 1, 1, 0.4 };
-        actor.world.drawSprite(Sprite.createBillboard(actor.world, actor.position, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, color, true));
-        actor.world.drawSprite(Sprite.createBillboard(actor.world, actor.position, ring_tex, self.t_wiggle * 50 * 5, color, true));
+        world.drawSprite(Sprite.createBillboard(world, self.actor.position, ring_tex, self.t_wiggle * self.t_wiggle * 40 * 5, color, true));
+        world.drawSprite(Sprite.createBillboard(world, self.actor.position, ring_tex, self.t_wiggle * 50 * 5, color, true));
     }
 }

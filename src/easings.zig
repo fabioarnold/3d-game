@@ -10,9 +10,13 @@ pub fn outCubic(x: f32) f32 {
 }
 
 pub fn inSine(t: f32) f32 {
-    return 0 - @cos(std.math.pi / 2.0 * t) + 1;
+    return -@cos(std.math.pi / 2.0 * t) + 1;
 }
 
 pub fn outSine(t: f32) f32 {
     return @sin(std.math.pi / 2.0 * t);
+}
+
+pub fn inOutSine(t: f32) f32 {
+    return -(@cos(std.math.pi * t) - 1) * 0.5;
 }

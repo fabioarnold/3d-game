@@ -20,45 +20,49 @@ name: []const u8,
 model_on: SkinnedModel,
 t_wiggle: f32 = 0,
 
+pub const vtable = Actor.Interface.VTable{
+    .added = added,
+    .update = update,
+    .pickup = pickup,
+    .draw = draw,
+};
+
+pub fn create(world: *World, name: []const u8) !*Checkpoint {
+    const self = try world.allocator.create(Checkpoint);
+    self.* = .{
+        .actor = .{
+            .world = world,
+            .pickup = .{ .radius = 16 * 5 },
+        },
+        .name = name,
+        .model_on = .{ .model = models.findByName("flag_on") },
+    };
+    self.model_on.play("Idle");
+    return self;
+}
+
 pub fn isCurrent(self: Checkpoint) bool {
     return std.mem.eql(u8, self.actor.world.entry.checkpoint, self.name);
 }
 
-pub fn init(actor: *Actor) void {
-    const self = @fieldParentPtr(Checkpoint, "actor", actor);
-    self.* = .{
-        .actor = actor.*,
-        .name = undefined, // set by create
-        .model_on = .{ .model = models.findByName("flag_on") },
-    };
-    self.model_on.play("Idle");
-    self.actor.pickup = .{ .radius = 16 * 5 };
-}
-
-pub fn create(world: *World, name: []const u8) !*Checkpoint {
-    const self = try Actor.create(Checkpoint, world);
-    self.name = name;
-    return self;
-}
-
-pub fn added(actor: *Actor) void {
-    const self = @fieldParentPtr(Checkpoint, "actor", actor);
+pub fn added(ptr: *anyopaque) void {
+    const self: *Checkpoint = @alignCast(@ptrCast(ptr));
     // if we're the spawn checkpoint, shift us so the player isn't on top
     if (self.isCurrent()) {
         self.actor.position.yMut().* -= 8 * 5;
     }
 }
 
-pub fn update(actor: *Actor) void {
-    const self = @fieldParentPtr(Checkpoint, "actor", actor);
+pub fn update(ptr: *anyopaque) void {
+    const self: *Checkpoint = @alignCast(@ptrCast(ptr));
     if (self.isCurrent()) {
         self.t_wiggle = math.approach(self.t_wiggle, 0, time.delta / 0.7);
         self.model_on.update();
     }
 }
 
-pub fn onPickup(actor: *Actor) void {
-    const self = @fieldParentPtr(Checkpoint, "actor", actor);
+pub fn pickup(ptr: *anyopaque) void {
+    const self: *Checkpoint = @alignCast(@ptrCast(ptr));
     if (!self.isCurrent()) {
         // audio.play(.sfx_checkpoint, actor.position);
 
@@ -72,8 +76,9 @@ pub fn onPickup(actor: *Actor) void {
     }
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
-    const self = @fieldParentPtr(Checkpoint, "actor", actor);
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
+    const self: *Checkpoint = @alignCast(@ptrCast(ptr));
+    const actor = &self.actor;
     const model_mat = actor.getTransform();
     if (self.isCurrent()) {
         self.model_on.draw(si, model_mat);

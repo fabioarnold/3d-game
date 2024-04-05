@@ -344,16 +344,24 @@ fn isAbleToPause(self: Player) bool {
     };
 }
 
-pub fn init(actor: *Actor) void {
-    const self = @fieldParentPtr(Player, "actor", actor);
+pub const vtable = Actor.Interface.VTable{
+    .added = added,
+    .update = update,
+    .lateUpdate = lateUpdate,
+    .draw = draw,
+};
+
+pub fn create(world: *World) !*Player {
+    const self = try world.allocator.create(Player);
     self.* = Player{
-        .actor = actor.*,
+        .actor = .{
+            .world = world,
+            .cast_point_shadow = .{},
+        },
         .skinned_model = .{ .model = models.findByName("player") },
         .state_machine = undefined,
     };
     self.skinned_model.play("Idle");
-
-    actor.cast_point_shadow = .{};
 
     self.state_machine = StateMachine(Player, State){ .instance = self, .state = .normal };
     self.state_machine.initState(.normal, stNormalUpdate, stNormalEnter, stNormalExit, null);
@@ -367,24 +375,28 @@ pub fn init(actor: *Actor) void {
     self.state_machine.initState(.cassette, null, null, stCassetteExit, stCassetteRoutine);
 
     self.setHairColor(color_normal);
+
+    return self;
 }
 
-pub fn added(actor: *Actor) void {
-    const self = @fieldParentPtr(Player, "actor", actor);
-    if (actor.world.entry.reason == .respawned) {
+pub fn added(ptr: *anyopaque) void {
+    const self: *Player = @alignCast(@ptrCast(ptr));
+    const world = self.actor.world;
+
+    if (world.entry.reason == .respawned) {
         self.camera_target_forward = stored_camera_forward;
         self.camera_target_distance = stored_camera_distance;
         self.state_machine.setState(.respawn);
-    } else if (actor.world.entry.submap and actor.world.entry.reason == .entered) {
+    } else if (world.entry.submap and world.entry.reason == .entered) {
         self.state_machine.setState(.strawberry_reveal);
     } else {
         self.state_machine.setState(.normal);
     }
 
-    self.camera_origin_pos = actor.position;
+    self.camera_origin_pos = self.actor.position;
     const result = self.getCameraTarget();
-    actor.world.camera.look_at = result.camera_look_at;
-    actor.world.camera.position = result.camera_position;
+    world.camera.look_at = result.camera_look_at;
+    world.camera.position = result.camera_position;
 }
 
 fn relativeMoveInput(self: *const Player) Vec2 {
@@ -403,8 +415,9 @@ fn setHairColor(self: *Player, color: [4]f32) void {
     self.hair.color = color;
 }
 
-pub fn update(actor: *Actor) void {
-    const self = @fieldParentPtr(Player, "actor", actor);
+pub fn update(ptr: *anyopaque) void {
+    const self: *Player = @alignCast(@ptrCast(ptr));
+    const world = self.actor.world;
 
     // only update camera if not dead
     if (self.state_machine.state != .dead) {
@@ -464,20 +477,22 @@ pub fn update(actor: *Actor) void {
 
     // pickups
     if (self.isAbleToPickup()) {
-        for (actor.world.actors.items) |pickup_actor| {
+        for (world.actors.items) |interface| {
+            const pickup_actor = interface.actor();
             if (pickup_actor.pickup) |pickup| {
                 const diff = self.solidWaistTestPos().sub(pickup_actor.position);
                 if (diff.dot(diff) < pickup.radius * pickup.radius) {
-                    pickup_actor.onPickup();
+                    interface.pickup();
                 }
             }
         }
     }
 }
 
-pub fn lateUpdate(actor: *Actor) void {
-    const self = @fieldParentPtr(Player, "actor", actor);
-    const world = actor.world;
+pub fn lateUpdate(ptr: *anyopaque) void {
+    const self: *Player = @alignCast(@ptrCast(ptr));
+    const actor = &self.actor;
+    const world = self.actor.world;
 
     // ground checks
     {
@@ -521,8 +536,8 @@ pub fn lateUpdate(actor: *Actor) void {
                     const dir3 = Vec3.new(dir.x(), dir.y(), 0);
                     const pos = actor.position.add(dir3.scale(4 * 5));
                     const vel = dir3.scale(50 * 5);
-                    const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
-                    world.add(dust_actor);
+                    const dust = Dust.create(world, pos, vel, .{}) catch unreachable;
+                    world.add(Actor.Interface.make(Dust, dust));
                 }
             }
         }
@@ -724,8 +739,8 @@ fn skidJump(self: *Player) void {
         const pos = self.actor.position.add(dir3.scale(8 * 5));
         const vel = Vec3.new(vel_xy.x() * 0.5, vel_xy.y() * 0.5, 10 * 5).sub(dir3.scale(50 * 5));
         const world = self.actor.world;
-        const dust_actor = Dust.create(world, pos, vel, .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
-        world.add(dust_actor);
+        const dust = Dust.create(world, pos, vel, .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        world.add(Actor.Interface.make(Dust, dust));
     }
 
     self.model_scale = Vec3.new(0.6, 0.6, 1.4);
@@ -934,9 +949,9 @@ pub fn stop(self: *Player) void {
     self.velocity = Vec3.zero();
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
-    const world = actor.world;
-    const self = @fieldParentPtr(Player, "actor", actor);
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
+    const self: *Player = @alignCast(@ptrCast(ptr));
+    const world = self.actor.world;
     // debug: draw camera origin pos
     // if (world.debug_draw) {
     //     world.drawSprite(Sprite.createBillboard(world.camera, self.camera_origin_pos, textures.findByName("circle"), 5, .{ 1, 0, 0, 1 }));
@@ -944,7 +959,7 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
 
     if (self.draw_model) {
         const scale = Mat4.fromScale(self.model_scale.scale(15));
-        const transform = actor.getTransform();
+        const transform = self.actor.getTransform();
         self.skinned_model.draw(si, transform.mul(scale));
     }
 
@@ -1106,8 +1121,8 @@ fn stNormalUpdate(self: *Player) void {
             const y = world.rng.float(f32) * 6 - 3;
             const pos = self.actor.position.add(Vec3.new(x, y, 0));
             const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
-            const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
-            world.add(dust_actor);
+            const dust = Dust.create(world, pos, vel, .{}) catch unreachable;
+            world.add(Actor.Interface.make(Dust, dust));
         }
     } else {
         self.t_footstep = footstep_interval;
@@ -1262,8 +1277,8 @@ fn stSkiddingEnter(self: *Player) void {
         const dir = Vec3.new(self.target_facing.x(), self.target_facing.y(), 0);
         const pos = self.actor.position.add(dir.scale(@floatFromInt(i * 5)));
         const world = self.actor.world;
-        const dust_actor = Dust.create(world, pos, dir.scale(-50 * 5), .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
-        world.add(dust_actor);
+        const dust = Dust.create(world, pos, dir.scale(-50 * 5), .{ .color = .{ 0.4, 0.4, 0.4, 1 } }) catch unreachable;
+        world.add(Actor.Interface.make(Dust, dust));
     }
 }
 
@@ -1397,8 +1412,8 @@ fn stClimbingUpdate(self: *Player) void {
                 if (time.onInterval(0.05)) {
                     const pos = self.actor.position.add(wall_up.scale(5).add(forward.scale(2)).scale(5));
                     const vel = if (self.t_platform_velocity_storage > 0) self.platform_velocity else Vec3.zero();
-                    const dust_actor = Dust.create(world, pos, vel, .{}) catch unreachable;
-                    world.add(dust_actor);
+                    const dust = Dust.create(world, pos, vel, .{}) catch unreachable;
+                    world.add(Actor.Interface.make(Dust, dust));
                 }
                 wall_slide_sound_enabled = true;
             }
@@ -1549,7 +1564,7 @@ fn stStrawberryGetExit(self: *Player) void {
         if (last_strawberry.bubble_to) |bubble_to| {
             self.bubbleTo(bubble_to);
         }
-        self.actor.world.destroy(&last_strawberry.actor);
+        self.actor.world.destroy(Actor.Interface.make(Strawberry, last_strawberry));
     }
 }
 

@@ -47,9 +47,9 @@ rng: std.rand.Random,
 entry: EntryInfo,
 general_timer: f32 = 0,
 
-actors: std.ArrayList(*Actor),
-adding: std.ArrayList(*Actor),
-destroying: std.ArrayList(*Actor),
+actors: std.ArrayList(Actor.Interface),
+adding: std.ArrayList(Actor.Interface),
+destroying: std.ArrayList(Actor.Interface),
 solids: std.ArrayList(*Solid),
 sprites: std.ArrayList(Sprite),
 player: *Player,
@@ -64,9 +64,9 @@ pub fn create(allocator: Allocator, entry: EntryInfo) !*World {
         .allocator = allocator,
         .rng = prng.random(),
         .entry = undefined,
-        .actors = std.ArrayList(*Actor).init(allocator),
-        .adding = std.ArrayList(*Actor).init(allocator),
-        .destroying = std.ArrayList(*Actor).init(allocator),
+        .actors = std.ArrayList(Actor.Interface).init(allocator),
+        .adding = std.ArrayList(Actor.Interface).init(allocator),
+        .destroying = std.ArrayList(Actor.Interface).init(allocator),
         .solids = std.ArrayList(*Solid).init(allocator),
         .sprites = std.ArrayList(Sprite).init(allocator),
         .player = undefined,
@@ -91,7 +91,7 @@ fn load(self: *World, entry: EntryInfo) !void {
     {
         if (map.snow_amount > 0) {
             const snow = try Snow.create(self, map.snow_amount, map.snow_wind);
-            self.add(snow);
+            self.add(Actor.Interface.make(Snow, snow));
         }
 
         if (map.skybox.len > 0) {
@@ -111,7 +111,7 @@ fn load(self: *World, entry: EntryInfo) !void {
 }
 
 pub fn deinit(self: *World) void {
-    for (self.actors.items) |actor| {
+    for (self.actors.items) |*actor| {
         actor.deinit(self.allocator);
     }
     self.actors.deinit();
@@ -121,13 +121,13 @@ pub fn deinit(self: *World) void {
     self.sprites.deinit();
 }
 
-pub fn add(self: *World, actor: *Actor) void {
+pub fn add(self: *World, actor: Actor.Interface) void {
     self.adding.append(actor) catch unreachable;
 }
 
-pub fn destroy(self: *World, actor: *Actor) void {
-    actor.destroying = true;
-    self.destroying.append(actor) catch unreachable;
+pub fn destroy(self: *World, interface: Actor.Interface) void {
+    interface.actor().destroying = true;
+    self.destroying.append(interface) catch unreachable;
 }
 
 fn resolveChanges(self: *World) void {
@@ -135,14 +135,17 @@ fn resolveChanges(self: *World) void {
         self.actors.append(actor) catch unreachable;
     }
     // notify they're being added
-    for (self.adding.items) |actor| {
+    for (self.adding.items) |*actor| {
         actor.added();
     }
     self.adding.clearRetainingCapacity();
 
-    for (self.destroying.items) |actor| {
-        if (std.mem.indexOfScalar(*Actor, self.actors.items, actor)) |i| {
-            _ = self.actors.swapRemove(i);
+    for (self.destroying.items) |*actor| {
+        for (self.actors.items, 0..) |a, i| {
+            if (a.ptr == actor.ptr) {
+                _ = self.actors.swapRemove(i);
+                break;
+            }
         }
         actor.deinit(self.allocator);
     }
@@ -319,10 +322,10 @@ pub fn update(self: *World) void {
     self.general_timer += time.delta;
 
     self.resolveChanges();
-    for (self.actors.items) |actor| {
+    for (self.actors.items) |*actor| {
         actor.update();
     }
-    for (self.actors.items) |actor| {
+    for (self.actors.items) |*actor| {
         actor.lateUpdate();
     }
 }
@@ -366,9 +369,10 @@ pub fn draw(self: *World, target: Target) void {
         .color_loc = shaders.textured_skinned.color_loc,
         .effects_loc = shaders.textured_skinned.effects_loc,
     };
-    for (self.actors.items) |actor| {
-        actor.draw(si);
+    for (self.actors.items) |*interface| {
+        interface.draw(si);
 
+        const actor = interface.actor();
         if (actor.cast_point_shadow) |point_shadow| {
             if (Sprite.createShadowSprite(self, actor.position.add(Vec3.new(0, 0, 1 * 5)), point_shadow.alpha)) |shadow_sprite| {
                 self.drawSprite(shadow_sprite);

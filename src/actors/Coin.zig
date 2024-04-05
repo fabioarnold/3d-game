@@ -21,25 +21,35 @@ const model = models.findByName("coin");
 actor: Actor,
 collected: bool = false,
 
-pub fn init(actor: *Actor) void {
-    const self = @fieldParentPtr(Coin, "actor", actor);
+pub const vtable = Actor.Interface.VTable{
+    .pickup = pickup,
+    .draw = draw,
+};
+
+pub fn create(world: *World) !*Coin {
+    const self = try world.allocator.create(Coin);
     self.* = .{
-        .actor = actor.*,
+        .actor = .{
+            .world = world,
+            .pickup = .{ .radius = 20 * 5 },
+            .cast_point_shadow = .{},
+        },
     };
-    self.actor.pickup = .{ .radius = 20 * 5 };
-    self.actor.cast_point_shadow = .{};
+    return self;
 }
 
-pub fn onPickup(actor: *Actor) void {
-    const self = @fieldParentPtr(Coin, "actor", actor);
+pub fn pickup(ptr: *anyopaque) void {
+    const self: *Coin = @alignCast(@ptrCast(ptr));
     if (!self.collected) {
         self.collected = true;
         // Audio
     }
 }
 
-pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
-    const self = @fieldParentPtr(Coin, "actor", actor);
+pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
+    const self: *Coin = @alignCast(@ptrCast(ptr));
+    const actor = &self.actor;
+    const world = actor.world;
 
     const inactive_color = [4]f32{ @as(f32, 0x5f) / 255.0, @as(f32, 0xcd) / 255.0, @as(f32, 0xe4) / 255.0, 1 };
     const collected_color = [4]f32{ @as(f32, 0xf1) / 255.0, @as(f32, 0x41) / 255.0, @as(f32, 0xdf) / 255.0, 0.5 };
@@ -48,7 +58,6 @@ pub fn draw(actor: *Actor, si: Model.ShaderInfo) void {
         material.metallic_roughness.base_color_factor = if (self.collected) collected_color else inactive_color;
     }
 
-    const world = actor.world;
     const model_mat = actor.getTransform()
         .mul(Mat4.fromRotation(std.math.radiansToDegrees(f32, world.general_timer * 3), Vec3.new(0, 0, 1)))
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, @sin(world.general_timer * 2) * 2 * 5)))

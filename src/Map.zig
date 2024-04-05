@@ -21,6 +21,7 @@ const StaticProp = @import("actors/StaticProp.zig");
 const Strawberry = @import("actors/Strawberry.zig");
 const Refill = @import("actors/Refill.zig");
 const Coin = @import("actors/Coin.zig");
+const MovingBlock = @import("actors/MovingBlock.zig");
 const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
@@ -62,31 +63,31 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, data: []const u8) !M
 }
 
 pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
-    const solid = try Actor.create(Solid, world);
+    const solid = try Solid.create(world);
     try generateSolid(allocator, solid, self.quake_map.worldspawn.solids.items);
     try world.solids.append(solid);
-    world.add(&solid.actor);
+    world.add(Actor.Interface.make(Solid, solid));
 
     var decoration_solids = std.ArrayList(QuakeMap.Solid).init(allocator);
     for (self.quake_map.entities.items) |entity| {
         if (std.mem.eql(u8, entity.classname, "Decoration")) {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
-            const floating_decoration = try Actor.create(FloatingDecoration, world);
+            const floating_decoration = try FloatingDecoration.create(world);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items);
-            world.add(&floating_decoration.actor);
+            world.add(Actor.Interface.make(FloatingDecoration, floating_decoration));
         } else {
-            try loadActor(world, entity);
+            try loadActor(&self.quake_map, world, entity);
         }
     }
-    const decoration_solid = try Actor.create(Solid, world);
+    const decoration_solid = try Solid.create(world);
     decoration_solid.model = try Model.fromSolids(allocator, decoration_solids.items);
-    world.add(&decoration_solid.actor);
+    world.add(Actor.Interface.make(Solid, decoration_solid));
 }
 
 const start_checkpoint = "Start";
 
-fn loadActor(world: *World, entity: QuakeMap.Entity) !void {
+fn loadActor(map: *const QuakeMap, world: *World, entity: QuakeMap.Entity) !void {
     if (std.mem.eql(u8, entity.classname, "PlayerSpawn")) {
         const name = entity.getStringProperty("name") catch start_checkpoint;
 
@@ -95,63 +96,71 @@ fn loadActor(world: *World, entity: QuakeMap.Entity) !void {
         // TODO: check if world.entry.checkpoint doesn't exist
 
         if (spawns_player) {
-            var player = try Actor.create(Player, world);
-            try handleActorCreation(world, entity, &player.actor);
+            const player = try Player.create(world);
+            try handleActorCreation(world, entity, Actor.Interface.make(Player, player));
             world.player = player;
         }
 
         if (!std.mem.eql(u8, name, start_checkpoint)) {
-            var checkpoint = try Checkpoint.create(world, name);
-            try handleActorCreation(world, entity, &checkpoint.actor);
+            const checkpoint = try Checkpoint.create(world, name);
+            try handleActorCreation(world, entity, Actor.Interface.make(Checkpoint, checkpoint));
         }
-    } else if (try createActor(world, entity)) |actor| {
-        try handleActorCreation(world, entity, actor);
+    } else if (try createActor(map, world, entity)) |interface| {
+        try handleActorCreation(world, entity, interface);
     }
 }
 
-fn handleActorCreation(world: *World, entity: QuakeMap.Entity, actor: *Actor) !void {
+fn handleActorCreation(world: *World, entity: QuakeMap.Entity, interface: Actor.Interface) !void {
+    const actor = interface.actor();
     if (entity.hasProperty("origin")) actor.position = try entity.getVec3Property("origin");
     if (entity.hasProperty("angle")) actor.angle = try entity.getFloatProperty("angle");
-    world.add(actor);
+    world.add(interface);
 }
 
-fn findTargetEntity(map: *const Map, entity: QuakeMap.Entity, target_name: []const u8) ?QuakeMap.Entity {
+fn findTargetEntity(map: *const QuakeMap, target_name: []const u8) ?QuakeMap.Entity {
     if (target_name.len == 0) return null;
 
-    const target_name_property = entity.getStringProperty("targetname") catch "";
-    if (std.mem.eql(u8, target_name_property, target_name)) return entity;
-
-    for (map.entities.items) |child| {
-        if (map.findTargetEntity(child, target_name)) |target| {
-            return target;
-        }
+    for (map.entities.items) |entity| {
+        const target_name_property = entity.getStringProperty("targetname") catch "";
+        if (std.mem.eql(u8, target_name_property, target_name)) return entity;
     }
+
+    logger.err("target {s} not found", .{target_name});
 
     return null;
 }
 
-fn createActor(world: *World, entity: QuakeMap.Entity) !?*Actor {
+fn createActor(map: *const QuakeMap, world: *World, entity: QuakeMap.Entity) !?Actor.Interface {
     if (std.mem.eql(u8, entity.classname, "Strawberry")) {
-        const strawberry = try Actor.create(Strawberry, world);
+        const strawberry = try Strawberry.create(world);
         world.strawberry = strawberry;
-        return &strawberry.actor;
+        return Actor.Interface.make(Strawberry, strawberry);
     } else if (std.mem.eql(u8, entity.classname, "Refill")) {
         const refill = try Refill.create(world, entity.getIntProperty("double") catch 0 > 0);
-        return &refill.actor;
+        return Actor.Interface.make(Refill, refill);
     } else if (std.mem.eql(u8, entity.classname, "Cassette")) {
         const cassette = try Cassette.create(world, entity.getStringProperty("map") catch "");
-        return &cassette.actor;
+        return Actor.Interface.make(Cassette, cassette);
     } else if (std.mem.eql(u8, entity.classname, "Coin")) {
-        const coin = try Actor.create(Coin, world);
-        return &coin.actor;
+        const coin = try Coin.create(world);
+        return Actor.Interface.make(Coin, coin);
+    } else if (std.mem.eql(u8, entity.classname, "MovingBlock")) {
+        const target_name = entity.getStringProperty("target") catch "worldspawn";
+        var target_pos = Vec3.zero();
+        if (findTargetEntity(map, target_name)) |target| {
+            target_pos = target.getVec3Property("origin") catch Vec3.zero();
+        }
+        const moving_block = try MovingBlock.create(world, entity.getIntProperty("slow") catch 0 > 0, target_pos);
+        try generateSolid(world.allocator, &moving_block.solid, entity.solids.items);
+        try world.solids.append(&moving_block.solid);
+        return Actor.Interface.make(MovingBlock, moving_block);
     } else if (std.mem.eql(u8, entity.classname, "Granny")) {
-        var granny = try Actor.create(Granny, world);
-        return &granny.actor;
+        const granny = try Granny.create(world);
+        return Actor.Interface.make(Granny, granny);
     } else if (std.mem.eql(u8, entity.classname, "StaticProp")) {
-        const static_prop = try Actor.create(StaticProp, world);
         const model_path = try entity.getStringProperty("model");
-        static_prop.model = models.findByName(modelNameFromPath(model_path));
-        return &static_prop.actor;
+        const static_prop = try StaticProp.create(world, modelNameFromPath(model_path));
+        return Actor.Interface.make(StaticProp, static_prop);
     } else {
         return null;
     }

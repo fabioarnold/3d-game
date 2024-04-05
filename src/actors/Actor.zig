@@ -15,48 +15,63 @@ const Pickup = struct {
     radius: f32,
 };
 
+pub const Interface = struct {
+    ptr: *anyopaque,
+    vtable: *const VTable,
+
+    pub const VTable = struct {
+        deinit: *const fn (*anyopaque, Allocator) void = deinitNoop,
+        added: *const fn (*anyopaque) void = noop,
+        update: *const fn (*anyopaque) void = noop,
+        lateUpdate: *const fn (*anyopaque) void = noop,
+        pickup: *const fn (*anyopaque) void = noop,
+        draw: *const fn (*anyopaque, ShaderInfo) void = drawNoop,
+    };
+
+    pub fn make(comptime Class: type, instance: *Class) Interface {
+        return .{
+            .ptr = instance,
+            .vtable = &Class.vtable,
+        };
+    }
+
+    // Actor has to be the first member of the derived class for this to work
+    pub fn actor(self: Interface) *Actor {
+        return @alignCast(@ptrCast(self.ptr));
+    }
+
+    pub fn deinit(interface: *Interface, allocator: Allocator) void {
+        interface.vtable.deinit(interface.ptr, allocator);
+    }
+
+    pub fn added(interface: *const Interface) void {
+        interface.vtable.added(interface.ptr);
+    }
+
+    pub fn update(interface: *const Interface) void {
+        interface.vtable.update(interface.ptr);
+    }
+
+    pub fn lateUpdate(interface: *const Interface) void {
+        interface.vtable.lateUpdate(interface.ptr);
+    }
+
+    pub fn pickup(interface: *const Interface) void {
+        interface.vtable.pickup(interface.ptr);
+    }
+
+    pub fn draw(interface: *const Interface, shader_info: ShaderInfo) void {
+        interface.vtable.draw(interface.ptr, shader_info);
+    }
+};
+
 world: *World,
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
 destroying: bool = false,
 
-derived: *anyopaque,
-deinitFn: *const fn (*Actor, Allocator) void,
-addedFn: *const fn (*Actor) void,
-updateFn: *const fn (*Actor) void,
-lateUpdateFn: *const fn (*Actor) void,
-onPickupFn: *const fn (*Actor) void,
-drawFn: *const fn (*Actor, ShaderInfo) void,
-
 cast_point_shadow: ?CastPointShadow = null,
 pickup: ?Pickup = null,
-
-pub fn create(comptime Derived: type, world: *World) !*Derived {
-    var derived = try world.allocator.create(Derived);
-    derived.actor = .{
-        .world = world,
-        .derived = derived,
-        .addedFn = if (@hasDecl(Derived, "added")) &@field(Derived, "added") else &noOp,
-        .updateFn = if (@hasDecl(Derived, "update")) &@field(Derived, "update") else &noOp,
-        .lateUpdateFn = if (@hasDecl(Derived, "lateUpdate")) &@field(Derived, "lateUpdate") else &noOp,
-        .onPickupFn = if (@hasDecl(Derived, "onPickup")) &@field(Derived, "onPickup") else &noOp,
-        .drawFn = &Derived.draw,
-        .deinitFn = &struct {
-            fn deinit(self: *Actor, ally: Allocator) void {
-                ally.destroy(@as(*Derived, @alignCast(@ptrCast(self.derived))));
-            }
-        }.deinit,
-    };
-    if (@hasDecl(Derived, "init")) {
-        const initFn = &@field(Derived, "init");
-        initFn(&derived.actor);
-    }
-    return derived;
-}
-
-pub fn deinit(self: *Actor, allocator: Allocator) void {
-    self.deinitFn(self, allocator);
-}
 
 pub fn getTransform(self: Actor) Mat4 {
     const r = Mat4.fromRotation(self.angle, Vec3.new(0, 0, 1));
@@ -64,24 +79,6 @@ pub fn getTransform(self: Actor) Mat4 {
     return t.mul(r);
 }
 
-fn noOp(_: *Actor) void {}
-
-pub fn added(self: *Actor) void {
-    self.addedFn(self);
-}
-
-pub fn update(self: *Actor) void {
-    self.updateFn(self);
-}
-
-pub fn lateUpdate(self: *Actor) void {
-    self.lateUpdateFn(self);
-}
-
-pub fn onPickup(self: *Actor) void {
-    self.onPickupFn(self);
-}
-
-pub fn draw(self: *Actor, si: ShaderInfo) void {
-    self.drawFn(self, si);
-}
+pub fn deinitNoop(_: *anyopaque, _: Allocator) void {}
+pub fn noop(_: *anyopaque) void {}
+pub fn drawNoop(_: *anyopaque, _: ShaderInfo) void {}

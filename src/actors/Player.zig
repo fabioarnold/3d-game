@@ -421,14 +421,23 @@ pub fn update(ptr: *anyopaque) void {
     const world = self.actor.world;
 
     // only update camera if not dead
-    if (self.state_machine.state != .dead) {
+    if (self.state_machine.state != .respawn and
+        self.state_machine.state != .dead and
+        self.state_machine.state != .strawberry_reveal and
+        self.state_machine.state != .cassette)
+    {
         // rotate camera
+        var angle = math.angleFromDir(self.camera_target_forward.toVec2());
+        angle -= controls.camera.x() * time.delta * std.math.radiansToDegrees(4);
+        self.camera_target_forward = math.dirFromAngle(angle).toVec3(0);
 
         // move camera in / out
     }
 
     // don't do anything if dead
-    if (self.state_machine.state == .dead) {
+    if (self.state_machine.state == .respawn or
+        self.state_machine.state == .dead or
+        self.state_machine.state == .cutscene) {
         self.state_machine.update();
         return;
     }

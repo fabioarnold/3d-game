@@ -98,11 +98,9 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
 }
 
-export fn onMouseMove(x: c_int, y: c_int) void {
-    const dx: f32 = @floatFromInt(x);
-    const dy: f32 = @floatFromInt(y);
-    mrx += -0.25 * dy;
-    mry += 0.25 * dx;
+export fn onMouseMove(dx: c_int, dy: c_int) void {
+    mrx += @floatFromInt(dx);
+    mry += @floatFromInt(dy);
 }
 var mrx: f32 = 0;
 var mry: f32 = 0;
@@ -118,14 +116,15 @@ export fn onAnimationFrame() void {
     time.delta = time.now - time.last;
     defer time.last = time.now;
 
+    defer {
+        mrx = 0;
+        mry = 0;
+    }
+
     gl.glClearColor(0, 0, 0, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
     const target = Target{.width = video_width, .height = video_height};
-
-    // game.scene.camera.rotateView(mrx, mry);
-    mrx = 0;
-    mry = 0;
 
     controls.move = Vec2.new(wasm.getAxis(0), -wasm.getAxis(1));
     if (wasm.isKeyDown(keys.KEY_W)) controls.move.data[1] += 1;
@@ -134,6 +133,15 @@ export fn onAnimationFrame() void {
     if (wasm.isKeyDown(keys.KEY_D)) controls.move.data[0] += 1;
     const length = controls.move.length();
     if (length > 1) controls.move = controls.move.scale(1.0 / length);
+
+    controls.camera = Vec2.new(wasm.getAxis(2), wasm.getAxis(3));
+    if (wasm.isKeyDown(keys.KEY_LEFT)) controls.camera.data[0] -= 1;
+    if (wasm.isKeyDown(keys.KEY_RIGHT)) controls.camera.data[0] += 1;
+    if (wasm.isKeyDown(keys.KEY_UP)) controls.camera.data[1] += 1;
+    if (wasm.isKeyDown(keys.KEY_DOWN)) controls.camera.data[1] -= 1;
+    controls.camera.data[0] += 0.1 * mrx;
+    controls.camera.data[1] += 0.1 * mry;
+
     controls.jump.down = wasm.isButtonDown(0) or wasm.isKeyDown(keys.KEY_SPACE);
     controls.climb.down = wasm.isButtonDown(1) or wasm.isKeyDown(keys.KEY_E);
     controls.dash.down = wasm.isButtonDown(2) or wasm.isKeyDown(keys.KEY_SHIFT);
@@ -144,15 +152,7 @@ export fn onAnimationFrame() void {
     controls.dash.pressed = !dash_last_down and controls.dash.down;
     dash_last_down = controls.dash.down;
 
-    // game.scene.camera.rotateView(-2 * wasm.getAxis(3), 2 * wasm.getAxis(2));
-    // const x = Quat.fromAxis(game.scene.camera.angles.x(), Vec3.new(1, 0, 0));
-    // const y = Quat.fromAxis(game.scene.camera.angles.y(), Vec3.new(0, 0, -1));
-    // const orientation = y.mul(x);
-    // const cam_forward = orientation.rotateVec(Vec3.new(0, 1, 0));
-
     game.update();
-
-    // game.scene.camera.position = game.scene.player.actor.position.add(cam_forward.scale(-300));
 
     game.draw(target);
 }

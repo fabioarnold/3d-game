@@ -15,6 +15,7 @@ pub const ButtonState = struct {
 };
 
 pub var move: Vec2 = Vec2.zero();
+pub var camera: Vec2 = Vec2.zero();
 pub var jump: ButtonState = .{};
 pub var climb: ButtonState = .{};
 pub var dash: ButtonState = .{};

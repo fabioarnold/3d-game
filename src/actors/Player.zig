@@ -400,9 +400,10 @@ pub fn added(ptr: *anyopaque) void {
 }
 
 fn relativeMoveInput(self: *const Player) Vec2 {
-    const rot_y = Quat.fromAxis(self.actor.world.camera.angles.y(), Vec3.new(0, 0, -1));
-    const cam_move = rot_y.rotateVec(Vec3.new(controls.move.x(), controls.move.y(), 0));
-    return Vec2.new(cam_move.x(), cam_move.y());
+    const world = self.actor.world;
+    const forward = world.camera.look_at.sub(world.camera.position).toVec2().norm();
+    const side = Vec2.new(forward.y(), -forward.x());
+    return forward.scale(controls.move.y()).add(side.scale(controls.move.x()));
 }
 
 fn setHairColor(self: *Player, color: [4]f32) void {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const gl = @import("web/webgl.zig");
@@ -78,8 +79,19 @@ transition: ?Transition = null,
 pub fn startup(self: *Game, allocator: std.mem.Allocator) void {
     self.scenes = std.ArrayList(Scene).init(allocator);
     self.batcher = Batcher.init(allocator);
-    const titlescreen = Titlescreen.create(allocator) catch unreachable;
-    self.scenes.append(.{ .titlescreen = titlescreen }) catch unreachable; // TODO: startup
+    if (builtin.mode == .Debug) {
+        // skip titlescreen
+        const world = World.create(allocator, .{
+            .map = "1",
+            .checkpoint = "",
+            .submap = false,
+            .reason = .entered,
+        }) catch unreachable;
+        self.scenes.append(.{ .world = world }) catch unreachable;
+    } else {
+        const titlescreen = Titlescreen.create(allocator) catch unreachable;
+        self.scenes.append(.{ .titlescreen = titlescreen }) catch unreachable; // TODO: startup
+    }
 }
 
 pub fn isMidTransition(self: *Game) bool {

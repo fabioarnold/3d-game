@@ -59,7 +59,7 @@ pub fn draw(ptr: *anyopaque, si: Model.ShaderInfo) void {
     }
 
     const model_mat = actor.getTransform()
-        .mul(Mat4.fromRotation(std.math.radiansToDegrees(f32, world.general_timer * 3), Vec3.new(0, 0, 1)))
+        .mul(Mat4.fromRotation(std.math.radiansToDegrees(world.general_timer * 3), Vec3.new(0, 0, 1)))
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, @sin(world.general_timer * 2) * 2 * 5)))
         .mul(Mat4.fromScale(Vec3.one().scale(6 * 5)));
     model.draw(si, model_mat);

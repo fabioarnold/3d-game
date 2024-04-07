@@ -54,7 +54,7 @@ pub fn draw(ptr: *anyopaque, si: ShaderInfo) void {
     const transform = self.actor.getTransform()
         .mul(Mat4.fromScale(Vec3.new(3, 3, 3)))
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, 2 * @sin(t * 2)))
-        .mul(Mat4.fromRotation(std.math.radiansToDegrees(f32, 3 * t), Vec3.new(0, 0, 1)))
+        .mul(Mat4.fromRotation(std.math.radiansToDegrees(3 * t), Vec3.new(0, 0, 1)))
         .mul(Mat4.fromScale(Vec3.new(5, 5, 5))));
     gl.glUniform1f(si.effects_loc, 0);
     model.draw(si, transform);

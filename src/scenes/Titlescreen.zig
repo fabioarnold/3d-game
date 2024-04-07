@@ -106,7 +106,7 @@ pub fn draw(self: *Titlescreen, target: Target) void { // , target: Target
     //     .depth_mask = true,
     //     .cutout_mode = false,
     // };
-    const angle_z = -(1 - easings.outCubic(self.easing)) * std.math.radiansToDegrees(f32, 10);
+    const angle_z = -(1 - easings.outCubic(self.easing)) * std.math.radiansToDegrees(10);
     const model_mat = Mat4.fromRotation(angle_z, Vec3.new(0, 0, 1))
         .mul(Mat4.fromTranslate(Vec3.new(0, 0, 53)))
         .mul(Mat4.fromScale(Vec3.new(10, 10, 10)));

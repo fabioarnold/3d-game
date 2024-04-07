@@ -21,16 +21,6 @@ color: [4]f32,
 percent: f32 = 0,
 duration: f32,
 
-pub fn init(actor: *Actor) void {
-    const self = @fieldParentPtr(Dust, "actor", actor);
-    self.* = .{
-        .actor = actor.*,
-        .image = textures.findByName(images[actor.world.rng.uintLessThan(usize, images.len)]),
-        .color = undefined,
-        .duration = 0.5 + 0.5 * actor.world.rng.float(f32),
-    };
-}
-
 const CreateOptions = struct {
     color: [4]f32 = [4]f32{ 0.7, 0.75, 0.8, 1 },
 };

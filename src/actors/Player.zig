@@ -5,6 +5,7 @@ const Vec3 = za.Vec3;
 const Vec4 = za.Vec4;
 const Quat = za.Quat;
 const Mat4 = za.Mat4;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const zgltf = @import("zgltf");
 const math = @import("../math.zig");
 const easings = @import("../easings.zig");
@@ -19,8 +20,9 @@ const Game = @import("../Game.zig");
 const World = @import("../World.zig");
 const Actor = @import("Actor.zig");
 const Cassette = @import("Cassette.zig");
-const Strawberry = @import("Strawberry.zig");
 const Dust = @import("Dust.zig");
+const Solid = @import("Solid.zig");
+const Strawberry = @import("Strawberry.zig");
 const models = @import("../models.zig");
 const Model = @import("../Model.zig");
 const SkinnedModel = @import("../SkinnedModel.zig");
@@ -356,6 +358,7 @@ pub fn create(world: *World) !*Player {
     self.* = Player{
         .actor = .{
             .world = world,
+            .local_bounds = BoundingBox.initCenterSize(Vec3.new(0, 0, 10 * 5), 10 * 5),
             .cast_point_shadow = .{},
         },
         .skinned_model = .{ .model = models.findByName("player") },
@@ -437,7 +440,8 @@ pub fn update(ptr: *anyopaque) void {
     // don't do anything if dead
     if (self.state_machine.state == .respawn or
         self.state_machine.state == .dead or
-        self.state_machine.state == .cutscene) {
+        self.state_machine.state == .cutscene)
+    {
         self.state_machine.update();
         return;
     }

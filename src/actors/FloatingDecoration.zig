@@ -24,7 +24,10 @@ pub const vtable = Actor.Interface.VTable{
 pub fn create(world: *World) !*FloatingDecoration {
     const floating_decoration = try world.allocator.create(FloatingDecoration);
     floating_decoration.* = .{
-        .actor = .{.world = world},
+        .actor = .{
+            .world = world,
+            .local_bounds = undefined, // calculated by Map
+        },
         .model = undefined,
         .rate = undefined,
         .offset = undefined,

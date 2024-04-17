@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const ShaderInfo = @import("../Model.zig").ShaderInfo;
 const World = @import("../World.zig");
 
@@ -68,6 +69,7 @@ pub const Interface = struct {
 world: *World,
 position: Vec3 = Vec3.zero(),
 angle: f32 = 0,
+local_bounds: BoundingBox,
 destroying: bool = false,
 
 cast_point_shadow: ?CastPointShadow = null,

@@ -1,6 +1,7 @@
 const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const math = @import("../math.zig");
 const time = @import("../time.zig");
 const textures = @import("../textures.zig");
@@ -32,6 +33,7 @@ pub fn create(world: *World, name: []const u8) !*Checkpoint {
     self.* = .{
         .actor = .{
             .world = world,
+            .local_bounds = BoundingBox.initCenterSize(Vec3.zero(), 8 * 5),
             .pickup = .{ .radius = 16 * 5 },
         },
         .name = name,

@@ -1,6 +1,7 @@
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const Actor = @import("Actor.zig");
 const World = @import("../World.zig");
 const models = @import("../models.zig");
@@ -12,6 +13,7 @@ const Granny = @This();
 actor: Actor,
 skinned_model: SkinnedModel,
 
+// TODO: inherit from NPC
 pub const vtable = Actor.Interface.VTable{
     .draw = draw,
 };
@@ -21,6 +23,7 @@ pub fn create(world: *World) !*Granny {
     self.* = .{
         .actor = .{
             .world = world,
+            .local_bounds = BoundingBox.initCenterSize(Vec3.new(0, 0, 4 * 5), 8 * 5),
             .cast_point_shadow = .{},
         },
         .skinned_model = .{ .model = models.findByName("granny") },

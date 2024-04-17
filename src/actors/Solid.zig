@@ -24,7 +24,7 @@ vertices: std.ArrayList(Vec3),
 faces: std.ArrayList(Face),
 
 pub const vtable = Actor.Interface.VTable{
-// TODO: connect to Actor
+    // TODO: connect to Actor
     // .deinit = deinit,
     .draw = draw,
 };
@@ -32,7 +32,10 @@ pub const vtable = Actor.Interface.VTable{
 pub fn create(world: *World) !*Solid {
     const solid = try world.allocator.create(Solid);
     solid.* = .{
-        .actor = .{ .world = world },
+        .actor = .{
+            .world = world,
+            .local_bounds = undefined, // calculated by Map
+        },
         .model = undefined,
         .vertices = undefined,
         .faces = undefined,

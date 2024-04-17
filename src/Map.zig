@@ -7,6 +7,7 @@ const Mat3 = za.Mat3;
 const Mat4 = za.Mat4;
 const gl = @import("web/webgl.zig");
 const math = @import("math.zig");
+const BoundingBox = @import("spatial/BoundingBox.zig");
 const assets = @import("assets");
 const models = @import("models.zig");
 const QuakeMap = @import("QuakeMap.zig");
@@ -27,20 +28,6 @@ const textures = @import("textures.zig");
 const logger = std.log.scoped(.map);
 
 const Map = @This();
-
-const BoundingBox = struct {
-    min: Vec3,
-    max: Vec3,
-
-    fn center(self: BoundingBox) Vec3 {
-        return self.min.add(self.max).scale(0.5);
-    }
-
-    fn conflate(self: *BoundingBox, other: BoundingBox) void {
-        self.min = self.min.min(other.min);
-        self.max = self.max.max(other.max);
-    }
-};
 
 quake_map: QuakeMap,
 skybox: []const u8,
@@ -84,6 +71,7 @@ pub fn load(self: *const Map, allocator: Allocator, world: *World) !void {
             try decoration_solids.appendSlice(entity.solids.items);
         } else if (std.mem.eql(u8, entity.classname, "FloatingDecoration")) {
             const floating_decoration = try FloatingDecoration.create(world);
+            floating_decoration.actor.local_bounds = calculateSolidsBounds(entity.solids.items);
             floating_decoration.model = try Model.fromSolids(allocator, entity.solids.items, Vec3.zero());
             world.add(Actor.Interface.make(FloatingDecoration, floating_decoration));
         } else {
@@ -225,6 +213,11 @@ fn generateSolid(allocator: Allocator, into: *Solid, solids: []const QuakeMap.So
             });
         }
     }
+
+    into.actor.local_bounds = .{
+        .min = bounds.min.sub(center),
+        .max = bounds.max.sub(center),
+    };
 }
 
 fn modelNameFromPath(model_path: []const u8) []const u8 {

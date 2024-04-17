@@ -1,6 +1,7 @@
 const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const math = @import("../math.zig");
 const time = @import("../time.zig");
 const textures = @import("../textures.zig");
@@ -23,7 +24,10 @@ pub const vtable = Actor.Interface.VTable{
 pub fn create(world: *World, amount: f32, direction: Vec3) !*Snow {
     const self = try world.allocator.create(Snow);
     self.* = .{
-        .actor = .{.world = world},
+        .actor = .{
+            .world = world,
+            .local_bounds = BoundingBox.initCenterSize(Vec3.zero(), 10000 * 5),
+        },
         .amount = amount,
         .direction = direction,
     };

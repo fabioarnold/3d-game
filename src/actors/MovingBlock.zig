@@ -33,7 +33,10 @@ pub fn create(world: *World, go_slow: bool, end: Vec3) !*MovingBlock {
     const self = try world.allocator.create(MovingBlock);
     self.* = .{
         .solid = .{
-            .actor = .{ .world = world },
+            .actor = .{
+                .world = world,
+                .local_bounds = undefined, // calculated by Map
+            },
             .model = undefined,
             .vertices = undefined,
             .faces = undefined,

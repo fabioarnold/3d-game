@@ -2,6 +2,7 @@ const std = @import("std");
 const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const wasm = @import("../web/wasm.zig");
 const gl = @import("../web/webgl.zig");
 const Actor = @import("Actor.zig");
@@ -33,6 +34,7 @@ pub fn create(world: *World) !*Strawberry {
     self.* = .{
         .actor = .{
             .world = world,
+            .local_bounds = BoundingBox.initCenterSize(Vec3.zero(), 10 * 5),
             .pickup = .{ .radius = 12 * 5 },
             .cast_point_shadow = .{},
         },

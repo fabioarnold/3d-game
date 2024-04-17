@@ -2,6 +2,7 @@ const std = @import("std");
 const za = @import("zalgebra");
 const Vec2 = za.Vec2;
 const Vec3 = za.Vec3;
+const BoundingBox = @import("../spatial/BoundingBox.zig");
 const math = @import("../math.zig");
 const time = @import("../time.zig");
 const textures = @import("../textures.zig");
@@ -33,7 +34,11 @@ pub const vtable = Actor.Interface.VTable{
 pub fn create(world: *World, position: Vec3, velocity: Vec3, options: CreateOptions) !*Dust {
     const self = try world.allocator.create(Dust);
     self.* = .{
-        .actor = .{ .world = world, .position = position, },
+        .actor = .{
+            .world = world,
+            .local_bounds = BoundingBox.zero(),
+            .position = position,
+        },
         .velocity = velocity,
         .image = textures.findByName(images[world.rng.uintLessThan(usize, images.len)]),
         .color = options.color,

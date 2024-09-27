@@ -8,12 +8,12 @@
     },
     .dependencies = .{
         .zalgebra = .{
-            .url = "https://github.com/kooparse/zalgebra/archive/1ab7f25cd3f947289e98a617ae785607bbc5054e.tar.gz",
-            .hash = "1220665cd38b7e9625ddfe7cedde962586ceadf12ce8dd46acc5273c2d17fbf6afd7",
+            .url = "https://github.com/kooparse/zalgebra/archive/e36116987d11c4a28ab8a03ab62d71be8b81404a.tar.gz",
+            .hash = "12200e1b17e15217623e36563e459164fff4debb8210ea9d027d8548aca6d30f0811",
         },
         .zgltf = .{
-            .url = "https://github.com/kooparse/zgltf/archive/79de7be54e57235496fc3277708991fc857ef7e7.tar.gz",
-            .hash = "12205d4f90da23c4d6dc48b94b8327be3e898a23fe528babf0b223674e8977d8f473",
+            .url = "https://github.com/kooparse/zgltf/archive/b26bc5bae7a0c03821ca4d73ec26d2bbad1f5bf2.tar.gz",
+            .hash = "1220ff2dbebeb83461da67b185d994ae61ebcea747c1bfbfb48b23c8e456cc53ea83",
         },
     },
 }

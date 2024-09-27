@@ -1,4 +1,3 @@
-zig-cache
-main.wasm
-main.o
+.zig-cache
+zig-out
 Content
